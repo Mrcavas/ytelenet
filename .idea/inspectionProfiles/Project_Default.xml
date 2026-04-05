@@ -1,0 +1,26 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="DuplicatedCode" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <Languages>
+        <language minSize="87" name="Go" />
+      </Languages>
+    </inspection_tool>
+    <inspection_tool class="GoUnhandledErrorResult" enabled="true" level="WARNING" enabled_by_default="true">
+      <methods>
+        <method importPath="strings" receiver="*Builder" name="WriteByte" />
+        <method importPath="hash" receiver="Hash" name="Write" />
+        <method importPath="bytes" receiver="*Buffer" name="WriteString" />
+        <method importPath="strings" receiver="*Builder" name="WriteRune" />
+        <method importPath="bytes" receiver="*Buffer" name="Write" />
+        <method importPath="bytes" receiver="*Buffer" name="WriteByte" />
+        <method importPath="strings" receiver="*Builder" name="Write" />
+        <method importPath="math/rand" receiver="*Rand" name="Read" />
+        <method importPath="strings" receiver="*Builder" name="WriteString" />
+        <method importPath="bytes" receiver="*Buffer" name="WriteRune" />
+        <method importPath="io" receiver="ReadCloser" name="Close" />
+        <method importPath="github.com/gorilla/websocket" receiver="*Conn" name="Close" />
+      </methods>
+    </inspection_tool>
+  </profile>
+</component>

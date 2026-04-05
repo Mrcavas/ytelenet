@@ -1,0 +1,126 @@
+{
+  "participantMeta": {
+    "role": "SPEAKER",
+    "description": "",
+    "sendAudio": false,
+    "sendVideo": true
+  },
+  "participantAttributes": {
+    "role": "SPEAKER",
+    "description": ""
+  },
+  "sendAudio": false,
+  "sendVideo": true,
+  "sendSharing": false,
+  "serviceName": "telemost",
+  "capabilitiesOffer": {
+    "offerAnswerMode": [
+      "SEPARATE"
+    ],
+    "initialSubscriberOffer": [
+      "ON_HELLO"
+    ],
+    "slotsMode": [
+      "FROM_CONTROLLER"
+    ],
+    "simulcastMode": [
+      "DISABLED",
+      "STATIC"
+    ],
+    "selfVadStatus": [
+      "FROM_SERVER",
+      "FROM_CLIENT"
+    ],
+    "dataChannelSharing": [
+      "TO_RTP"
+    ],
+    "videoEncoderConfig": [
+      "NO_CONFIG",
+      "ONLY_INIT_CONFIG",
+      "RUNTIME_CONFIG"
+    ],
+    "dataChannelVideoCodec": [
+      "VP8",
+      "UNIQUE_CODEC_FROM_TRACK_DESCRIPTION"
+    ],
+    "bandwidthLimitationReason": [
+      "BANDWIDTH_REASON_DISABLED",
+      "BANDWIDTH_REASON_ENABLED"
+    ],
+    "sdkDefaultDeviceManagement": [
+      "SDK_DEFAULT_DEVICE_MANAGEMENT_DISABLED",
+      "SDK_DEFAULT_DEVICE_MANAGEMENT_ENABLED"
+    ],
+    "joinOrderLayout": [
+      "JOIN_ORDER_LAYOUT_DISABLED",
+      "JOIN_ORDER_LAYOUT_ENABLED"
+    ],
+    "pinLayout": [
+      "PIN_LAYOUT_DISABLED"
+    ],
+    "sendSelfViewVideoSlot": [
+      "SEND_SELF_VIEW_VIDEO_SLOT_DISABLED",
+      "SEND_SELF_VIEW_VIDEO_SLOT_ENABLED"
+    ],
+    "serverLayoutTransition": [
+      "SERVER_LAYOUT_TRANSITION_DISABLED"
+    ],
+    "sdkPublisherOptimizeBitrate": [
+      "SDK_PUBLISHER_OPTIMIZE_BITRATE_DISABLED",
+      "SDK_PUBLISHER_OPTIMIZE_BITRATE_FULL",
+      "SDK_PUBLISHER_OPTIMIZE_BITRATE_ONLY_SELF"
+    ],
+    "sdkNetworkLostDetection": [
+      "SDK_NETWORK_LOST_DETECTION_DISABLED"
+    ],
+    "sdkNetworkPathMonitor": [
+      "SDK_NETWORK_PATH_MONITOR_DISABLED"
+    ],
+    "publisherVp9": [
+      "PUBLISH_VP9_DISABLED",
+      "PUBLISH_VP9_ENABLED"
+    ],
+    "svcMode": [
+      "SVC_MODE_DISABLED",
+      "SVC_MODE_L3T3",
+      "SVC_MODE_L3T3_KEY"
+    ],
+    "subscriberOfferAsyncAck": [
+      "SUBSCRIBER_OFFER_ASYNC_ACK_DISABLED",
+      "SUBSCRIBER_OFFER_ASYNC_ACK_ENABLED"
+    ],
+    "androidBluetoothRoutingFix": [
+      "ANDROID_BLUETOOTH_ROUTING_FIX_DISABLED"
+    ],
+    "fixedIceCandidatesPoolSize": [
+      "FIXED_ICE_CANDIDATES_POOL_SIZE_DISABLED"
+    ],
+    "sdkAndroidTelecomIntegration": [
+      "SDK_ANDROID_TELECOM_INTEGRATION_DISABLED"
+    ],
+    "setActiveCodecsMode": [
+      "SET_ACTIVE_CODECS_MODE_DISABLED",
+      "SET_ACTIVE_CODECS_MODE_VIDEO_ONLY"
+    ],
+    "subscriberDtlsPassiveMode": [
+      "SUBSCRIBER_DTLS_PASSIVE_MODE_DISABLED"
+    ],
+    "svcModes": [
+      "FALSE"
+    ],
+    "reportTelemetryModes": [
+      "TRUE"
+    ],
+    "keepDefaultDevicesModes": [
+      "FALSE"
+    ]
+  },
+  "sdkInfo": {
+    "implementation": "browser",
+    "version": "5.22.0",
+    "hwConcurrency": 8
+  },
+  "disablePublisher": false,
+  "disableSubscriber": false,
+  "disableSubscriberAudio": false
+}

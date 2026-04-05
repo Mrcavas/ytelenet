@@ -1,0 +1,25 @@
+{
+  "pcSeq": 1,
+  "tracks": [
+    {
+      "mid": "0",
+      "transceiverMid": "0",
+      "kind": "AUDIO",
+      "priority": 0,
+      "label": "Microphone (fifine Microphone)",
+      "codecs": {},
+      "groupId": 1,
+      "description": ""
+    },
+    {
+      "mid": "1",
+      "transceiverMid": "1",
+      "kind": "VIDEO",
+      "priority": 0,
+      "label": "USB2.0 HD UVC WebCam",
+      "codecs": {},
+      "groupId": 1,
+      "description": ""
+    }
+  ]
+}

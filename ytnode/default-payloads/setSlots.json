@@ -1,0 +1,58 @@
+{
+  "slots": [
+    {
+      "width": 544,
+      "height": 306
+    },
+    {
+      "width": 544,
+      "height": 306
+    },
+    {
+      "width": 544,
+      "height": 306
+    },
+    {
+      "width": 416,
+      "height": 234
+    },
+    {
+      "width": 336,
+      "height": 189
+    },
+    {
+      "width": 272,
+      "height": 153
+    },
+    {
+      "width": 256,
+      "height": 144
+    },
+    {
+      "width": 256,
+      "height": 144
+    },
+    {
+      "width": 256,
+      "height": 144
+    },
+    {
+      "width": 256,
+      "height": 144
+    },
+    {
+      "width": 256,
+      "height": 144
+    },
+    {
+      "width": 256,
+      "height": 144
+    }
+  ],
+  "audioSlotsCount": 0,
+  "key": 2,
+  "shutdownAllVideo": null,
+  "withSelfView": true,
+  "selfViewVisibility": "ON_LOADING_THEN_SHOW",
+  "gridConfig": {}
+}

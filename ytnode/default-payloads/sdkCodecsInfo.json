@@ -1,0 +1,116 @@
+{
+  "vp8": {
+    "supported": "CODEC_FEATURE_SUPPORTED",
+    "hwDecode": "CODEC_FEATURE_SUPPORTED",
+    "hwEncode": "CODEC_FEATURE_SUPPORTED",
+    "isoString": "vp8"
+  },
+  "vp9": [
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "vp09.00.51.08"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "vp09.02.51.10"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "vp09.02.51.12"
+    }
+  ],
+  "av1": [
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "av01.0.04M.08"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "av01.0.04M.10"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "av01.0.05M.08"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "av01.0.05M.10"
+    }
+  ],
+  "h264": [
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.42e01f"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.42001f"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.4d001f"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.640034"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.420034"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.42e034"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.4d0034"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.640c1f"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.640020"
+    },
+    {
+      "supported": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwDecode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "hwEncode": "CODEC_FEATURE_NOT_SUPPORTED",
+      "isoString": "avc1.64001f"
+    }
+  ]
+}
