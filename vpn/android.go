@@ -1,0 +1,177 @@
+package vpn
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+)
+
+var stopChan chan struct{}
+
+type Log struct {
+	Level string `json:"level"`
+	Msg   string `json:"msg"`
+	Time  string `json:"time"`
+}
+
+type AndroidVoidFunction interface {
+	Exec()
+}
+type AndroidStringFunction interface {
+	Exec(data string)
+}
+type AndroidLogFunction interface {
+	Exec(data *Log)
+}
+
+type androidLogWriter struct {
+	onLog AndroidLogFunction
+}
+
+func (wr androidLogWriter) Write(p []byte) (int, error) {
+	logEntry := Log{}
+	if err := json.Unmarshal(p, &logEntry); err != nil {
+		return 0, err
+	}
+	wr.onLog.Exec(&logEntry)
+	return len(p), nil
+}
+
+func Start(
+	fd int, token string, onLog AndroidLogFunction,
+	onConnected AndroidVoidFunction,
+	onStop AndroidStringFunction,
+) {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetOutput(androidLogWriter{onLog: onLog})
+	log.SetLevel(log.DebugLevel)
+
+	stopChan = make(chan struct{}, 1)
+
+	go func() {
+		err := androidMain(
+			stopChan, token, &TunnelOptions{
+				Dns: "8.8.8.8",
+			}, fd, onConnected.Exec,
+		)
+		if err != nil {
+			onStop.Exec(err.Error())
+		} else {
+			onStop.Exec("")
+		}
+	}()
+}
+
+func Stop() {
+	stopChan <- struct{}{}
+}
+
+func androidMain(
+	interrupt chan struct{}, initStr string, opts *TunnelOptions, fd int,
+	onConnected func(),
+) error {
+
+	select {
+	case <-interrupt:
+		return fmt.Errorf("interrupted")
+
+	case <-time.After(4 * time.Second):
+		log.Infof("Connected with token: '%v'", initStr)
+		onConnected()
+	}
+
+	<-interrupt
+
+	return nil
+}
+
+// func androidMain(
+//   interrupt chan struct{}, initStr string, opts *TunnelOptions, fd int,
+//   onConnected func(),
+// ) error {
+//   log.Infof("Launching client\n")
+//
+//   internalLog := makeInternalLog()
+//
+//   token, err := base64.StdEncoding.DecodeString(initStr)
+//   if err != nil {
+//     return fmt.Errorf("failed to decode token")
+//   }
+//
+//   parts := strings.Split(string(token), ";")
+//   if len(parts) != 3 {
+//     return fmt.Errorf("failed to decode token")
+//   }
+//
+//   roomUrl := makeRoomUrl(parts[0])
+//   clientName := parts[1]
+//   pcNum, err := strconv.Atoi(parts[2])
+//   if err != nil {
+//     return fmt.Errorf("failed to decode token")
+//   }
+//
+//   log.Infof("Initializing YT node\n")
+//   node, err := ytnode.MakeNew(internalLog, roomUrl, clientName, "server")
+//   if err != nil {
+//     return fmt.Errorf("failed to initialize YT nodes: %w\n", err)
+//   }
+//   defer node.Stop()
+//
+//   log.Infof("Waiting for connection")
+//   select {
+//   case st := <-node.Events():
+//     if st != ytnode.ConnectedState {
+//       return fmt.Errorf("unable to connect")
+//     }
+//   case <-interrupt:
+//     log.Info("Interrupted\n")
+//     return nil
+//   }
+//   onConnected()
+//   log.Infof("Connected\n")
+//
+//   tunnel := makeAndStartTunnel(internalLog, true, pcNum, opts, &fd)
+//   defer tunnel.Close()
+//
+//   go func() {
+//     buf := make([]byte, 1186)
+//
+//     for {
+//       size, err := tunnel.Read(buf)
+//       if errors.Is(err, os.ErrClosed) {
+//         log.Infof("Closed tunnel\n")
+//         break
+//       }
+//       if err != nil {
+//         log.Fatalf("Failed to read from tunnel: %v\n", err)
+//       }
+//
+//       node.Send(bytes.Clone(buf[:size]))
+//     }
+//   }()
+//
+//   for {
+//     select {
+//     case state := <-node.Events():
+//       if state == ytnode.StoppedState {
+//         log.Infof("Node stopped\n")
+//         return nil
+//       }
+//
+//     case buf := <-node.Data():
+//       _, err := tunnel.Write(bytes.Clone(buf))
+//       if errors.Is(err, os.ErrClosed) {
+//         return nil
+//       }
+//       if err != nil {
+//         log.Errorf("Couldn't write packet\n")
+//       }
+//
+//     case <-interrupt:
+//       log.Infof("Interrupted\n")
+//       return nil
+//     }
+//   }
+// }

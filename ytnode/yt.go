@@ -41,8 +41,10 @@ type YTClient struct {
 	rtcSubscriber   *webrtc.PeerConnection
 	subscriberUfrag *string
 
-	peerNames *bimap.BiMap[PeerId, string]
-	peerMids  *bimap.BiMap[PeerId, string]
+	peerConfigMu        sync.RWMutex
+	peerNames           *bimap.BiMap[PeerId, string]
+	peerMids            *bimap.BiMap[PeerId, string]
+	peerConfigUpdateIdx int
 
 	publisherConnected chan struct{}
 	rtcPacketsInc      chan []byte
@@ -73,8 +75,8 @@ func NewYTClient(
 		peerMids:  bimap.NewBiMap[PeerId, string](),
 
 		publisherConnected: make(chan struct{}, 1),
-		rtcPacketsInc:      make(chan []byte),
-		rtcPacketsOut:      make(chan []byte),
+		rtcPacketsInc:      make(chan []byte, 4096),
+		rtcPacketsOut:      make(chan []byte, 4096),
 	}
 }
 
@@ -97,7 +99,6 @@ func (yt *YTClient) handleWSMessage(msg *WSMessageIncoming) error {
 		err := yt.HandleRTCSubscriberOffer(msg.SubscriberSdpOffer.Sdp)
 		if err != nil {
 			return fmt.Errorf("failed to handle subscriber offer: %w", err)
-
 		}
 
 	case msg.WebrtcIceCandidate != nil:
@@ -116,6 +117,9 @@ func (yt *YTClient) handleWSMessage(msg *WSMessageIncoming) error {
 		}
 
 	case msg.UpdateDescription != nil:
+		yt.log.Debugf("Got UpdateDescription")
+		yt.peerConfigMu.Lock()
+
 		for id := range yt.peerNames.GetForwardMap() {
 			yt.peerNames.Delete(id)
 		}
@@ -124,17 +128,35 @@ func (yt *YTClient) handleWSMessage(msg *WSMessageIncoming) error {
 			yt.peerNames.Insert(v.Id, v.Meta.Name)
 		}
 
+		yt.peerConfigUpdateIdx += 1
+		yt.peerConfigMu.Unlock()
+
 	case msg.UpsertDescription != nil:
+		yt.log.Debugf("Got UpsertDescription")
+		yt.peerConfigMu.Lock()
+
 		for _, v := range msg.UpsertDescription.Description {
 			yt.peerNames.Insert(v.Id, v.Meta.Name)
 		}
 
+		yt.peerConfigUpdateIdx += 1
+		yt.peerConfigMu.Unlock()
+
 	case msg.RemoveDescription != nil:
+		yt.log.Debugf("Got RemoveDescription")
+		yt.peerConfigMu.Lock()
+
 		for _, v := range msg.RemoveDescription.DescriptionId {
 			yt.peerNames.Delete(v)
 		}
 
+		yt.peerConfigUpdateIdx += 1
+		yt.peerConfigMu.Unlock()
+
 	case msg.SlotsConfig != nil:
+		yt.log.Debugf("Got SlotsConfig")
+		yt.peerConfigMu.Lock()
+
 		for id := range yt.peerMids.GetForwardMap() {
 			yt.peerMids.Delete(id)
 		}
@@ -147,6 +169,9 @@ func (yt *YTClient) handleWSMessage(msg *WSMessageIncoming) error {
 				v.ParticipantVideoByMid.ParticipantId, v.ParticipantVideoByMid.Mid,
 			)
 		}
+
+		yt.peerConfigUpdateIdx += 1
+		yt.peerConfigMu.Unlock()
 
 	case msg.SelfQualityReport != nil:
 		yt.log.Infof("SelfQualityReport: %v", msg.SelfQualityReport.NetworkScore)

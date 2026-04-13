@@ -44,7 +44,7 @@ func (yt *YTClient) InitRTCSubscriber(
 		func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 			mid := receiver.RTPTransceiver().Mid()
 			codecName := track.Codec().MimeType
-			yt.log.Infof("Got incoming track! Codec: %s, MID: %s", codecName, mid)
+			yt.log.Debugf("Got incoming track! Codec: %s, MID: %s", codecName, mid)
 
 			if codecName == webrtc.MimeTypeVP8 {
 				onVideoTrack(mid, track)

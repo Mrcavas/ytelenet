@@ -52,24 +52,7 @@ func (yt *YTClient) InitializeRTC() error {
 	}
 
 	onVideoTrack := func(mid string, track *webrtc.TrackRemote) {
-		id, ok := yt.peerMids.GetInverse(mid)
-		if !ok {
-			yt.log.Errorf("Couldn't get peerId for mid '%v'\n", mid)
-			return
-		}
-		name, ok := yt.peerNames.Get(id)
-		if !ok {
-			yt.log.Errorf("Couldn't get name for peerId '%v'\n", id)
-			return
-		}
-		if name != yt.targetName {
-			yt.log.Infof("Skipping non-target track '%v'\n", mid)
-
-			go DrainTrack(track)
-			return
-		}
-
-		go yt.StreamFromDataTrack(track)
+		go yt.StreamFromDataTrack(mid, track)
 	}
 
 	if err := yt.InitRTCSubscriber(onVideoTrack); err != nil {
@@ -94,10 +77,14 @@ func MakeDataTrack() (*webrtc.TrackLocalStaticRTP, error) {
 	return videoTrack, nil
 }
 
-func (yt *YTClient) StreamFromDataTrack(track *webrtc.TrackRemote) {
-	yt.log.Infof("Started streaming from '%v'\n", yt.targetName)
+func (yt *YTClient) StreamFromDataTrack(mid string, track *webrtc.TrackRemote) {
+	yt.log.Infof("Started streaming from %v (%v)\n", mid, yt.targetName)
 
 	extractor := NewRTPExtractor()
+	yt.peerConfigMu.RLock()
+	currentReceiver := ""
+	currentConfigIdx := -1
+	yt.peerConfigMu.RUnlock()
 
 	for {
 		packet, _, err := track.ReadRTP()
@@ -109,6 +96,26 @@ func (yt *YTClient) StreamFromDataTrack(track *webrtc.TrackRemote) {
 		if err != nil {
 			yt.log.Errorf("Error reading track: %v\n", err)
 			return
+		}
+
+		yt.peerConfigMu.RLock()
+		if currentConfigIdx != yt.peerConfigUpdateIdx {
+			currentConfigIdx = yt.peerConfigUpdateIdx
+
+			id, ok := yt.peerMids.GetInverse(mid)
+			if ok {
+				currentReceiver, ok = yt.peerNames.Get(id)
+			}
+
+			if !ok {
+				currentReceiver = ""
+			}
+			yt.log.Infof("Track info updated, now mid %v is %v", mid, currentReceiver)
+		}
+		yt.peerConfigMu.RUnlock()
+
+		if currentReceiver != yt.targetName {
+			continue
 		}
 
 		buf, ok := extractor.Extract(packet)

@@ -20,6 +20,8 @@
         <method importPath="bytes" receiver="*Buffer" name="WriteRune" />
         <method importPath="io" receiver="ReadCloser" name="Close" />
         <method importPath="github.com/gorilla/websocket" receiver="*Conn" name="Close" />
+        <method importPath="github.com/sagernet/sing-tun" receiver="WinTun" name="Close" />
+        <method importPath="github.com/sagernet/sing-tun" receiver="Tun" name="Close" />
       </methods>
     </inspection_tool>
   </profile>

@@ -10,7 +10,7 @@ import (
 )
 
 type Node struct {
-	log *logrus.Logger
+	Log *logrus.Logger
 	yt  *YTClient
 
 	ctx    context.Context
@@ -27,11 +27,15 @@ func MakeNew(log *logrus.Logger, roomUrl, name, target string) (
 		events: make(chan State, 2),
 	}
 
+	if err := InitDefaultPayloads(); err != nil {
+		return nil, fmt.Errorf("failed to initialize default payloads: %w", err)
+	}
+
 	yt := NewYTClient(log, roomUrl, name, target)
 	node.yt = yt
 
 	if err := yt.Initialize(); err != nil {
-		return nil, fmt.Errorf("failed to initialize node: %w", err)
+		return nil, fmt.Errorf("failed to initialize node '%v': %w", roomUrl, err)
 	}
 
 	_, err := yt.RequestStatesForNewPeer(yt.InitData.PeerID)
@@ -121,6 +125,7 @@ func MakeNew(log *logrus.Logger, roomUrl, name, target string) (
 
 				case wsErr := <-yt.wsErrors:
 					log.Errorf("WS Error: %v\n", wsErr)
+					return
 
 				case <-node.ctx.Done():
 					log.Infof("Node cancelled\n")

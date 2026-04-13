@@ -13,6 +13,10 @@ var payloadFiles embed.FS
 var defaultPayloadsRaw = make(map[string][]byte)
 
 func InitDefaultPayloads() error {
+	if len(defaultPayloadsRaw) != 0 {
+		return nil
+	}
+
 	files, err := payloadFiles.ReadDir("default-payloads")
 	if err != nil {
 		return fmt.Errorf("failed to read embedded directory: %w", err)

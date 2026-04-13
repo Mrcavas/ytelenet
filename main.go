@@ -1,34 +1,29 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"io"
+	// "fmt"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
-	"ytelenet/ytnode_man"
+	"ytelenet/vpn"
 
 	"github.com/alexflint/go-arg"
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	chatUrl = "https://telemost.yandex.ru/j/91598352795911"
-	amount  = 4
-)
-
-var scanner *bufio.Scanner
+type ClientCmd struct {
+	Token       string `arg:"positional,required"`
+	Dns         string `arg:"--dns" default:"8.8.8.8"`
+	NoAutoRoute bool   `arg:"--no-auto-route"`
+}
+type ServerCmd struct{}
 
 type __args__ struct {
-	// Amount int    `arg:"positional,required" help:"Amount of nodes to spin up"`
-	Name   string `arg:"positional,required" help:"This client name"`
-	Target string `arg:"positional,required" help:"Target client name"`
+	Client *ClientCmd `arg:"subcommand:client"`
+	Server *ServerCmd `arg:"subcommand:server"`
 }
 
 func (__args__) Version() string {
-	return "YTClient 0.0.0"
+	return "YTelenet 0.5.0"
 }
 
 var args __args__
@@ -37,8 +32,6 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	scanner = bufio.NewScanner(os.Stdin)
-
 	log.SetFormatter(
 		&log.TextFormatter{
 			FullTimestamp:   true,
@@ -46,92 +39,25 @@ func main() {
 			TimestampFormat: "15:04:05.000",
 		},
 	)
-	// log.SetLevel(log.DebugLevel)
 
-	arg.MustParse(&args)
-	log.Infof(
-		"Starting %v nodes '%v' to '%v'\n", amount, args.Name, args.Target,
-	)
-
-	voidLog := log.New()
-	voidLog.SetOutput(io.Discard)
-
-	nodes, err := ytnode_man.MakeNodeManager(
-		amount, voidLog, chatUrl, args.Name, args.Target,
-	)
-	if err != nil {
-		log.Fatalln(err)
+	p := arg.MustParse(&args)
+	if p.Subcommand() == nil {
+		p.Fail("Must select working mode")
 	}
 
-	<-nodes.AllConnected()
-	go scanInput(nodes)
-	log.Infof("Connected\n")
-
-	for {
-		select {
-		case buf := <-nodes.Data():
-			handleRTCPacket(buf)
-
-		case <-interrupt:
-			log.Infof("Interrupted\n")
-			nodes.Stop()
-			return
+	if args.Server != nil {
+		clients, err := vpn.ParseClients()
+		if err != nil {
+			log.Fatalf("Failed to parse clients.json: %v", err)
 		}
-	}
-}
 
-func handleRTCPacket(buf []byte) {
-	if len(buf) >= 1024 && len(buf) <= 1030 && buf[8] == 97 {
-		return
-	}
-	if len(buf) >= 1024 && buf[8] == 97 {
-		log.Infof("[%v]: *large packet with size %v*", args.Target, len(buf))
-		return
-	}
-	log.Infof("[%v]: %s", args.Target, buf)
-}
-
-func scanInput(nodes *ytnode_man.NodeManager) {
-	for scanner.Scan() {
-		text := scanner.Text()
-
-		switch {
-		case strings.HasPrefix(text, "/burst "):
-			amount, err := strconv.Atoi(text[7:])
-			if err != nil {
-				return
-			}
-			filledBuf := make([]byte, 1024)
-			for i := 1; i < 1024; i++ {
-				filledBuf[i] = 97
-			}
-
-			log.Infof("[%v]: %v packet burst start\n", args.Name, amount)
-			nodes.SendAll([]byte(fmt.Sprintf("%v packet burst start", amount)))
-			for i := 1; i <= amount; i++ {
-				nodes.SendAll(filledBuf)
-			}
-			log.Infof("[%v]: %v packet burst end\n", args.Name, amount)
-			nodes.SendAll([]byte(fmt.Sprintf("%v packet burst end", amount)))
-
-		case strings.HasPrefix(text, "/kb "):
-			kb, err := strconv.Atoi(text[4:])
-			if err != nil {
-				return
-			}
-
-			amount := kb * 1024
-			filledBuf := make([]byte, amount)
-			for i := 1; i < amount; i++ {
-				filledBuf[i] = 97
-			}
-
-			log.Infof("[%v]: *large packet with size %v* \n", args.Name, amount)
-			nodes.SendAll(filledBuf)
-
-		default:
-			log.Infof("[%v]: %v\n", args.Name, text)
-			nodes.SendAll([]byte(text))
-		}
+		vpn.ServerMain(interrupt, clients)
+	} else if args.Client != nil {
+		vpn.ClientMain(
+			interrupt, args.Client.Token, &vpn.TunnelOptions{
+				NoAutoRoute: args.Client.NoAutoRoute,
+				Dns:         args.Client.Dns,
+			},
+		)
 	}
 }
