@@ -1,3 +1,18 @@
 <resources>
-    <string name="app_name">YTelenet</string>
+    <string name="app_name" translatable="false">YTelenet</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="connecting">Connecting...</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="connected">Connected</string>
+    <string name="status_chan_name">Status</string>
+    <string name="status_chan_description">Shows the active VPN connection status</string>
+    <string name="status_notif_description">Connected and running in the background</string>
+    <string name="main_tab" translatable="false">VPN</string>
+    <string name="logs_tab">Logs</string>
+    <string name="enter_token">Enter token</string>
+    <string name="invalid_token">Invalid token</string>
+    <string name="token">Token</string>
+    <string name="show_token">Show token</string>
+    <string name="hide_token">Hide token</string>
 </resources>

@@ -10,7 +10,7 @@ import (
 func ServerMain(interrupt chan os.Signal, clients *ClientsDB) {
 	log.Infof("Launching server\n")
 
-	internalLog := makeInternalLog()
+	internalLog := makeInternalLog(false)
 
 	log.Infof("Connecting to YT\n")
 	nodes, err := MakeClientsManager(internalLog, clients)
@@ -42,6 +42,16 @@ func ServerMain(interrupt chan os.Signal, clients *ClientsDB) {
 	for {
 		select {
 		case buf := <-nodes.Data():
+			if buf[16] == 42 && buf[17] == 42 && buf[18] == 42 {
+				idx, ok := nodes.pcNumToIdx[buf[19]]
+				if !ok {
+					goto writeToTun
+				}
+				nodes.nodes[idx].Send(buf)
+				break
+			}
+
+		writeToTun:
 			_, err := tunnel.Write(buf)
 			if errors.Is(err, os.ErrClosed) {
 				break

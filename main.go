@@ -14,6 +14,7 @@ type ClientCmd struct {
 	Token       string `arg:"positional,required"`
 	Dns         string `arg:"--dns" default:"8.8.8.8"`
 	NoAutoRoute bool   `arg:"--no-auto-route"`
+	Destination string `arg:"--to" default:"server"`
 }
 type ServerCmd struct{}
 
@@ -23,7 +24,7 @@ type __args__ struct {
 }
 
 func (__args__) Version() string {
-	return "YTelenet 0.5.0"
+	return "YTelenet 0.6.2"
 }
 
 var args __args__
@@ -55,6 +56,7 @@ func main() {
 	} else if args.Client != nil {
 		vpn.ClientMain(
 			interrupt, args.Client.Token, &vpn.TunnelOptions{
+				Destination: args.Client.Destination,
 				NoAutoRoute: args.Client.NoAutoRoute,
 				Dns:         args.Client.Dns,
 			},

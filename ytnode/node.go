@@ -1,6 +1,7 @@
 package ytnode
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -148,7 +149,7 @@ func (node *Node) Data() <-chan []byte {
 }
 
 func (node *Node) Send(buf []byte) {
-	node.yt.rtcPacketsOut <- buf
+	node.yt.rtcPacketsOut <- bytes.Clone(buf)
 }
 
 func (node *Node) Events() <-chan State {

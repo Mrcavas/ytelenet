@@ -1,9 +1,14 @@
 package vpn
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"time"
+	"os"
+	"strconv"
+	"strings"
+	"ytelenet/ytnode"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -65,6 +70,12 @@ func Start(
 }
 
 func Stop() {
+	log.Debugf("stopChan <- struct{}{}")
+
+	select {
+	case <-stopChan:
+	default:
+	}
 	stopChan <- struct{}{}
 }
 
@@ -72,106 +83,87 @@ func androidMain(
 	interrupt chan struct{}, initStr string, opts *TunnelOptions, fd int,
 	onConnected func(),
 ) error {
+	log.Infof("Launching client\n")
 
-	select {
-	case <-interrupt:
-		return fmt.Errorf("interrupted")
+	internalLog := makeInternalLog(false)
 
-	case <-time.After(4 * time.Second):
-		log.Infof("Connected with token: '%v'", initStr)
-		onConnected()
+	token, err := base64.StdEncoding.DecodeString(initStr)
+	if err != nil {
+		return fmt.Errorf("failed to decode token")
 	}
 
-	<-interrupt
+	parts := strings.Split(string(token), ";")
+	if len(parts) != 3 {
+		return fmt.Errorf("failed to decode token")
+	}
 
-	return nil
+	roomUrl := makeRoomUrl(parts[0])
+	clientName := parts[1]
+	pcNum, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return fmt.Errorf("failed to decode token")
+	}
+
+	tunnel := makeAndStartTunnel(internalLog, true, pcNum, opts, &fd)
+	defer tunnel.Close()
+
+	log.Infof("Initializing YT node\n")
+	node, err := ytnode.MakeNew(internalLog, roomUrl, clientName, "server")
+	if err != nil {
+		return fmt.Errorf("failed to initialize YT nodes: %w\n", err)
+	}
+	defer node.Stop()
+
+	log.Infof("Waiting for connection")
+	select {
+	case st := <-node.Events():
+		if st != ytnode.ConnectedState {
+			return fmt.Errorf("unable to connect")
+		}
+	case <-interrupt:
+		log.Info("Interrupted\n")
+		return nil
+	}
+	onConnected()
+	log.Infof("Connected\n")
+
+	go func() {
+		buf := make([]byte, 1186)
+
+		for {
+			size, err := tunnel.Read(buf)
+			if errors.Is(err, os.ErrClosed) {
+				log.Infof("Closed tunnel\n")
+				break
+			}
+			if err != nil {
+				log.Fatalf("Failed to read from tunnel: %v\n", err)
+			}
+
+			node.Send(buf[:size])
+		}
+	}()
+
+	for {
+		select {
+		case state := <-node.Events():
+			if state == ytnode.StoppedState {
+				log.Infof("Node stopped\n")
+				return nil
+			}
+
+		case buf := <-node.Data():
+			_, err := tunnel.Write(buf)
+			if errors.Is(err, os.ErrClosed) {
+				return nil
+			}
+			if err != nil {
+				log.Errorf("Couldn't write packet: %v\n", err)
+			}
+
+		case <-interrupt:
+			log.Infof("Interrupted\n")
+			return nil
+		}
+	}
 }
-
-// func androidMain(
-//   interrupt chan struct{}, initStr string, opts *TunnelOptions, fd int,
-//   onConnected func(),
-// ) error {
-//   log.Infof("Launching client\n")
-//
-//   internalLog := makeInternalLog()
-//
-//   token, err := base64.StdEncoding.DecodeString(initStr)
-//   if err != nil {
-//     return fmt.Errorf("failed to decode token")
-//   }
-//
-//   parts := strings.Split(string(token), ";")
-//   if len(parts) != 3 {
-//     return fmt.Errorf("failed to decode token")
-//   }
-//
-//   roomUrl := makeRoomUrl(parts[0])
-//   clientName := parts[1]
-//   pcNum, err := strconv.Atoi(parts[2])
-//   if err != nil {
-//     return fmt.Errorf("failed to decode token")
-//   }
-//
-//   log.Infof("Initializing YT node\n")
-//   node, err := ytnode.MakeNew(internalLog, roomUrl, clientName, "server")
-//   if err != nil {
-//     return fmt.Errorf("failed to initialize YT nodes: %w\n", err)
-//   }
-//   defer node.Stop()
-//
-//   log.Infof("Waiting for connection")
-//   select {
-//   case st := <-node.Events():
-//     if st != ytnode.ConnectedState {
-//       return fmt.Errorf("unable to connect")
-//     }
-//   case <-interrupt:
-//     log.Info("Interrupted\n")
-//     return nil
-//   }
-//   onConnected()
-//   log.Infof("Connected\n")
-//
-//   tunnel := makeAndStartTunnel(internalLog, true, pcNum, opts, &fd)
-//   defer tunnel.Close()
-//
-//   go func() {
-//     buf := make([]byte, 1186)
-//
-//     for {
-//       size, err := tunnel.Read(buf)
-//       if errors.Is(err, os.ErrClosed) {
-//         log.Infof("Closed tunnel\n")
-//         break
-//       }
-//       if err != nil {
-//         log.Fatalf("Failed to read from tunnel: %v\n", err)
-//       }
-//
-//       node.Send(bytes.Clone(buf[:size]))
-//     }
-//   }()
-//
-//   for {
-//     select {
-//     case state := <-node.Events():
-//       if state == ytnode.StoppedState {
-//         log.Infof("Node stopped\n")
-//         return nil
-//       }
-//
-//     case buf := <-node.Data():
-//       _, err := tunnel.Write(bytes.Clone(buf))
-//       if errors.Is(err, os.ErrClosed) {
-//         return nil
-//       }
-//       if err != nil {
-//         log.Errorf("Couldn't write packet\n")
-//       }
-//
-//     case <-interrupt:
-//       log.Infof("Interrupted\n")
-//       return nil
-//     }
-//   }
-// }

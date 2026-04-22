@@ -1,7 +1,6 @@
 package vpn
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -17,7 +16,7 @@ func ClientMain(
 ) {
 	log.Infof("Launching client\n")
 
-	internalLog := makeInternalLog()
+	internalLog := makeInternalLog(false)
 
 	token, err := base64.StdEncoding.DecodeString(initStr)
 	if err != nil {
@@ -37,7 +36,9 @@ func ClientMain(
 	}
 
 	log.Infof("Initializing YT node\n")
-	node, err := ytnode.MakeNew(internalLog, roomUrl, clientName, "server")
+	node, err := ytnode.MakeNew(
+		internalLog, roomUrl, clientName, opts.Destination,
+	)
 	if err != nil {
 		log.Fatalf("Failed to initialize YT nodes: %v\n", err)
 	}
@@ -71,7 +72,7 @@ func ClientMain(
 				log.Fatalf("Failed to read from tunnel: %v\n", err)
 			}
 
-			node.Send(bytes.Clone(buf[:size]))
+			node.Send(buf[:size])
 		}
 	}()
 
@@ -84,7 +85,7 @@ func ClientMain(
 			}
 
 		case buf := <-node.Data():
-			_, err := tunnel.Write(bytes.Clone(buf))
+			_, err := tunnel.Write(buf)
 			if errors.Is(err, os.ErrClosed) {
 				return
 			}

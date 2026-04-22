@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connect">Подключиться</string>
+    <string name="disconnect">Отключиться</string>
+    <string name="connecting">Подключение...</string>
+    <string name="disconnected">Отключено</string>
+    <string name="connected">Подключено</string>
+    <string name="status_chan_name">Статус</string>
+    <string name="status_chan_description">Показывает текущий статус VPN</string>
+    <string name="status_notif_description">Подключено и работает в фоне</string>
+    <string name="logs_tab">Логи</string>
+    <string name="enter_token">Введите токен</string>
+    <string name="invalid_token">Токен некорректен</string>
+    <string name="token">Токен</string>
+    <string name="show_token">Показать токен</string>
+    <string name="hide_token">Скрыть токен</string>
+</resources>

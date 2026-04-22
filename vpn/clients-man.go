@@ -34,7 +34,7 @@ func MakeClientsManager(
 
 		pcNumToIdx: make(map[byte]int, amount),
 
-		allDataIn: make(chan []byte, 4096),
+		allDataIn: make(chan []byte, 8192),
 	}
 
 	g := new(errgroup.Group)
@@ -105,13 +105,13 @@ func (man *NodeManager) TryReconnect(idx int, client ClientData, tryIdx int) {
 		return
 	}
 
-	if tryIdx == 3 {
-		log.Errorln("Reconnection failed")
-		man.Stop()
-		return
-	}
+	// if tryIdx == 3 {
+	//   log.Errorln("Reconnection failed")
+	//   man.Stop()
+	//   return
+	// }
 
-	<-time.After(time.Duration(tryIdx) * 2 * time.Second)
+	<-time.After( /*time.Duration(tryIdx) * */ 2 * time.Second)
 
 	err := makeNode(idx, man, man.internalLog, client)
 	if err != nil {
@@ -125,12 +125,12 @@ func (man *NodeManager) TryReconnect(idx int, client ClientData, tryIdx int) {
 func (man *NodeManager) SendTo(pcNum byte, buf []byte) {
 	idx, ok := man.pcNumToIdx[pcNum]
 	if !ok {
-		log.Warnf("Failed to get node index for pcNum %v", pcNum)
+		log.Debugf("Failed to get node index for pcNum %v", pcNum)
 		return
 	}
 
 	if man.nodes[idx] != nil {
-		man.nodes[idx].Send(bytes.Clone(buf))
+		man.nodes[idx].Send(buf)
 	}
 }
 
@@ -143,7 +143,9 @@ func (man *NodeManager) Stop() {
 
 	var wg sync.WaitGroup
 	for _, node := range man.nodes {
-		wg.Go(node.Stop)
+		if node != nil {
+			wg.Go(node.Stop)
+		}
 	}
 	wg.Wait()
 }

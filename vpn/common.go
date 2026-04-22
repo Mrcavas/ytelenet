@@ -8,15 +8,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func makeInternalLog() *log.Logger {
+func makeInternalLog(debug bool) *log.Logger {
 	internalLog := log.New()
 	internalLog.SetFormatter(log.StandardLogger().Formatter)
-	internalLog.SetLevel(log.WarnLevel)
+	internalLog.SetOutput(log.StandardLogger().Out)
+	level := log.WarnLevel
+	if debug {
+		level = log.DebugLevel
+	}
+	internalLog.SetLevel(level)
 
 	return internalLog
 }
 
 type TunnelOptions struct {
+	Destination string
 	NoAutoRoute bool
 	Dns         string
 }
@@ -25,28 +31,10 @@ func makeAndStartTunnel(
 	internalLog *log.Logger, isClient bool, pcNum int, opts *TunnelOptions,
 	fd *int,
 ) tun.Tun {
-	netMon, err := tun.NewNetworkUpdateMonitor(internalLog)
-	if err != nil {
-		log.Fatalf("Failed to create network update monitor (???): %v\n", err)
-	}
-
-	interfaceMon, err := tun.NewDefaultInterfaceMonitor(
-		netMon,
-		internalLog,
-		tun.DefaultInterfaceMonitorOptions{},
-	)
-	if err != nil {
-		log.Fatalf("Failed to create interface monitor (???): %v\n", err)
-	}
-
 	mask := 24
-	if isClient {
-		mask = 32
-	}
 
 	tunnelOpts := tun.Options{
-		MTU:              1186,
-		InterfaceMonitor: interfaceMon,
+		MTU: 1186,
 	}
 
 	if fd == nil {
@@ -56,11 +44,31 @@ func makeAndStartTunnel(
 		tunnelOpts.Inet4Address = []netip.Prefix{
 			netip.MustParsePrefix(fmt.Sprintf("42.42.42.%v/%v", pcNum, mask)),
 		}
+
+		netMon, err := tun.NewNetworkUpdateMonitor(internalLog)
+		if err != nil {
+			log.Fatalf("Failed to create network update monitor: %v\n", err)
+		}
+
+		intMon, err := tun.NewDefaultInterfaceMonitor(
+			netMon,
+			internalLog,
+			tun.DefaultInterfaceMonitorOptions{},
+		)
+		if err != nil {
+			log.Fatalf("Failed to create interface monitor: %v\n", err)
+		}
+
+		tunnelOpts.InterfaceMonitor = intMon
 	} else {
 		tunnelOpts.FileDescriptor = *fd
+		tunnelOpts.StrictRoute = isClient
+		tunnelOpts.Inet4Address = []netip.Prefix{
+			netip.MustParsePrefix(fmt.Sprintf("42.42.42.%v/%v", pcNum, mask)),
+		}
 	}
 
-	if isClient {
+	if isClient && opts.Dns != "" {
 		dnsAddr, err := netip.ParseAddr(opts.Dns)
 		if err != nil {
 			log.Fatalf("Failed to parse DNS")

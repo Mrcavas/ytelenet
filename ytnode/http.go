@@ -17,7 +17,7 @@ func (yt *YTClient) Initialize() error {
 	yt.log.Debugf("Initializing HTTP\n")
 
 	yt.http = &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 
 	reqUrl := fmt.Sprintf(

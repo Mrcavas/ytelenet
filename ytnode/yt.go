@@ -67,7 +67,7 @@ func NewYTClient(
 		instanceId:       uuid.NewString(),
 		connectedPeerIds: make([]string, 0, 2),
 
-		wsErrors:      make(chan error, 10),
+		wsErrors:      make(chan error, 100),
 		wsMessages:    make(chan *WSMessageIncoming, 100),
 		wsInitialized: make(chan struct{}, 1),
 
