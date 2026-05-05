@@ -1,7 +1,6 @@
 package ytnode
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -63,7 +62,7 @@ func MakeNew(log *logrus.Logger, roomUrl, name, target string) (
 				node.events <- StoppedState
 
 				httpPinger.Stop()
-				yt.CloseWS()
+				_ = yt.CloseWS()
 
 				if wsPinger != nil {
 					wsPinger.Stop()
@@ -101,18 +100,7 @@ func MakeNew(log *logrus.Logger, roomUrl, name, target string) (
 						return
 					}
 
-				case msg, ok := <-yt.wsMessages:
-					if !ok {
-						if wsPinger != nil {
-							wsPinger.Stop()
-							wsPinger = nil
-							wsPingerChan = nil
-						}
-						// TODO: probably should add some kind of reconnection later
-						log.Errorf("WS closed\n")
-						return
-					}
-
+				case msg := <-yt.wsMessages:
 					if err := yt.handleWSMessage(msg); err != nil {
 						log.Errorf("Error handling WS: %v\n", err)
 						return
@@ -127,6 +115,21 @@ func MakeNew(log *logrus.Logger, roomUrl, name, target string) (
 				case wsErr := <-yt.wsErrors:
 					log.Errorf("WS Error: %v\n", wsErr)
 					return
+					// if wsPinger != nil {
+					//   wsPinger.Stop()
+					//   wsPinger = nil
+					//   wsPingerChan = nil
+					// }
+					//
+					// _ = yt.CloseWS()
+					// _ = yt.CloseRTCPublisher()
+					// _ = yt.CloseRTCSubscriber()
+					//
+					// if err := yt.InitializeWS(); err != nil {
+					//   yt.wsErrors <- fmt.Errorf("failed to initialize WS: %w", err)
+					//   continue
+					// }
+					// yt.SendHello()
 
 				case <-node.ctx.Done():
 					log.Infof("Node cancelled\n")
@@ -149,11 +152,19 @@ func (node *Node) Data() <-chan []byte {
 }
 
 func (node *Node) Send(buf []byte) {
-	node.yt.rtcPacketsOut <- bytes.Clone(buf)
+	node.yt.rtcPacketsOut <- buf
 }
 
 func (node *Node) Events() <-chan State {
 	return node.events
+}
+
+func (node *Node) IsTargetInRoom() bool {
+	node.yt.peerConfigMu.RLock()
+	res := node.yt.peerNames.ExistsInverse(node.yt.targetName)
+	node.yt.peerConfigMu.RUnlock()
+
+	return res
 }
 
 type State int

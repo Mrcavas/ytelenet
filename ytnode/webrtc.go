@@ -39,7 +39,7 @@ func (yt *YTClient) InitializeRTC() error {
 	}
 
 	onStateChange := func(state webrtc.ICEConnectionState) {
-		yt.log.Infof("Publisher ICE Connection State: %s", state)
+		yt.log.Warnf("Publisher ICE Connection State: %s", state)
 
 		if state == webrtc.ICEConnectionStateConnected {
 			go yt.StreamToDataTrack(track)
@@ -124,7 +124,7 @@ func (yt *YTClient) StreamFromDataTrack(mid string, track *webrtc.TrackRemote) {
 				yt.rtcPacketsInc <- buf
 			}
 		} else {
-			yt.log.Warnf("Couldn't parse packet: %v\n", packet.Payload)
+			yt.log.Warnf("Received malformed packet\n")
 		}
 	}
 }

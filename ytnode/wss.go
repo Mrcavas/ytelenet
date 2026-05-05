@@ -29,7 +29,6 @@ func (yt *YTClient) InitializeWS() error {
 	yt.ws = ws
 
 	go func() {
-		defer close(yt.wsMessages)
 		for {
 			raw := json.RawMessage{}
 			if err := ws.ReadJSON(&raw); err != nil {
@@ -50,14 +49,15 @@ func (yt *YTClient) InitializeWS() error {
 	return nil
 }
 
-func (yt *YTClient) CloseWS() {
+func (yt *YTClient) CloseWS() error {
 	defer yt.ws.Close()
 
 	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
 	err := yt.ws.WriteMessage(websocket.CloseMessage, closeMsg)
 	if err != nil {
-		yt.wsErrors <- fmt.Errorf("failed to send close message: %w", err)
+		return fmt.Errorf("failed to send close message: %w", err)
 	}
+	return nil
 }
 
 func (yt *YTClient) SendWS(msg *WSMessageOutgoing) {

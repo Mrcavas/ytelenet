@@ -81,7 +81,7 @@ func (yt *YTClient) InitRTCSubscriber(
 
 	pc.OnICEConnectionStateChange(
 		func(state webrtc.ICEConnectionState) {
-			yt.log.Infof("Subscriber ICE Connection State: %s", state)
+			yt.log.Warnf("Subscriber ICE Connection State: %s", state)
 		},
 	)
 

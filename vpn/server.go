@@ -1,16 +1,17 @@
 package vpn
 
 import (
+	"bytes"
 	"errors"
 	"os"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func ServerMain(interrupt chan os.Signal, clients *ClientsDB) {
+func ServerMain(interrupt chan os.Signal, clients *ClientsDB, debug bool) {
 	log.Infof("Launching server\n")
 
-	internalLog := makeInternalLog(false)
+	internalLog := makeInternalLog(debug)
 
 	log.Infof("Connecting to YT\n")
 	nodes, err := MakeClientsManager(internalLog, clients)
@@ -35,13 +36,20 @@ func ServerMain(interrupt chan os.Signal, clients *ClientsDB) {
 				log.Fatalf("Failed to read from tunnel: %v\n", err)
 			}
 
-			nodes.SendTo(buf[19], buf[:size])
+			if size < 20 {
+				continue
+			}
+
+			nodes.SendTo(buf[19], bytes.Clone(buf[:size]))
 		}
 	}()
 
 	for {
 		select {
 		case buf := <-nodes.Data():
+			if len(buf) < 20 {
+				break
+			}
 			if buf[16] == 42 && buf[17] == 42 && buf[18] == 42 {
 				idx, ok := nodes.pcNumToIdx[buf[19]]
 				if !ok {
@@ -52,7 +60,7 @@ func ServerMain(interrupt chan os.Signal, clients *ClientsDB) {
 			}
 
 		writeToTun:
-			_, err := tunnel.Write(buf)
+			_, err := tunnel.Write(bytes.Clone(buf))
 			if errors.Is(err, os.ErrClosed) {
 				break
 			}

@@ -1,6 +1,7 @@
 package vpn
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -124,8 +125,14 @@ func androidMain(
 		log.Info("Interrupted\n")
 		return nil
 	}
-	onConnected()
-	log.Infof("Connected\n")
+
+	if node.IsTargetInRoom() {
+		log.Infof("Connected to server")
+		onConnected()
+	} else {
+		log.Errorf("Server isn't connected. Try reconnecting")
+		return nil
+	}
 
 	go func() {
 		buf := make([]byte, 1186)
@@ -140,7 +147,7 @@ func androidMain(
 				log.Fatalf("Failed to read from tunnel: %v\n", err)
 			}
 
-			node.Send(buf[:size])
+			node.Send(bytes.Clone(buf[:size]))
 		}
 	}()
 
@@ -153,7 +160,7 @@ func androidMain(
 			}
 
 		case buf := <-node.Data():
-			_, err := tunnel.Write(buf)
+			_, err := tunnel.Write(bytes.Clone(buf))
 			if errors.Is(err, os.ErrClosed) {
 				return nil
 			}

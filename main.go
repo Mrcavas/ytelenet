@@ -14,17 +14,19 @@ type ClientCmd struct {
 	Token       string `arg:"positional,required"`
 	Dns         string `arg:"--dns" default:"8.8.8.8"`
 	NoAutoRoute bool   `arg:"--no-auto-route"`
-	Destination string `arg:"--to" default:"server"`
+	Target      string `arg:"--to" default:"server"`
 }
 type ServerCmd struct{}
 
 type __args__ struct {
 	Client *ClientCmd `arg:"subcommand:client"`
 	Server *ServerCmd `arg:"subcommand:server"`
+
+	Debug bool `arg:"--debug" default:"false"`
 }
 
 func (__args__) Version() string {
-	return "YTelenet 0.6.2"
+	return "YTelenet 0.6.6"
 }
 
 var args __args__
@@ -52,11 +54,14 @@ func main() {
 			log.Fatalf("Failed to parse clients.json: %v", err)
 		}
 
-		vpn.ServerMain(interrupt, clients)
+		vpn.ServerMain(interrupt, clients, args.Debug)
 	} else if args.Client != nil {
 		vpn.ClientMain(
-			interrupt, args.Client.Token, &vpn.TunnelOptions{
-				Destination: args.Client.Destination,
+			interrupt,
+			args.Client.Token,
+			args.Debug,
+			&vpn.TunnelOptions{
+				Target:      args.Client.Target,
 				NoAutoRoute: args.Client.NoAutoRoute,
 				Dns:         args.Client.Dns,
 			},

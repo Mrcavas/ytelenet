@@ -1,6 +1,7 @@
 package vpn
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -12,11 +13,11 @@ import (
 )
 
 func ClientMain(
-	interrupt chan os.Signal, initStr string, opts *TunnelOptions,
+	interrupt chan os.Signal, initStr string, debug bool, opts *TunnelOptions,
 ) {
 	log.Infof("Launching client\n")
 
-	internalLog := makeInternalLog(false)
+	internalLog := makeInternalLog(debug)
 
 	token, err := base64.StdEncoding.DecodeString(initStr)
 	if err != nil {
@@ -37,7 +38,7 @@ func ClientMain(
 
 	log.Infof("Initializing YT node\n")
 	node, err := ytnode.MakeNew(
-		internalLog, roomUrl, clientName, opts.Destination,
+		internalLog, roomUrl, clientName, opts.Target,
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize YT nodes: %v\n", err)
@@ -56,6 +57,13 @@ func ClientMain(
 	}
 	log.Infof("Connected\n")
 
+	if node.IsTargetInRoom() {
+		log.Infof("Server is in the room, all good")
+	} else {
+		log.Errorf("Server isn't connected. Try reconnecting")
+		return
+	}
+
 	tunnel := makeAndStartTunnel(internalLog, true, pcNum, opts, nil)
 	defer tunnel.Close()
 
@@ -72,7 +80,7 @@ func ClientMain(
 				log.Fatalf("Failed to read from tunnel: %v\n", err)
 			}
 
-			node.Send(buf[:size])
+			node.Send(bytes.Clone(buf[:size]))
 		}
 	}()
 
@@ -85,7 +93,7 @@ func ClientMain(
 			}
 
 		case buf := <-node.Data():
-			_, err := tunnel.Write(buf)
+			_, err := tunnel.Write(bytes.Clone(buf))
 			if errors.Is(err, os.ErrClosed) {
 				return
 			}

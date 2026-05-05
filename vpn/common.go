@@ -22,7 +22,7 @@ func makeInternalLog(debug bool) *log.Logger {
 }
 
 type TunnelOptions struct {
-	Destination string
+	Target      string
 	NoAutoRoute bool
 	Dns         string
 }

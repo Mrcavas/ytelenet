@@ -73,9 +73,13 @@ func makeNode(
 		return err
 	}
 
-	st := <-node.Events()
-	if st != ytnode.ConnectedState {
-		return fmt.Errorf("unable to connect to node %v", client.Name)
+	select {
+	case st := <-node.Events():
+		if st != ytnode.ConnectedState {
+			return fmt.Errorf("unable to connect to node %v", client.Name)
+		}
+	case <-time.After(15 * time.Second):
+		return fmt.Errorf("unable to connect to node - connection timeout")
 	}
 
 	man.nodes[idx] = node
