@@ -22,11 +22,12 @@ type __args__ struct {
 	Client *ClientCmd `arg:"subcommand:client"`
 	Server *ServerCmd `arg:"subcommand:server"`
 
-	Debug bool `arg:"--debug" default:"false"`
+	Debug bool   `arg:"--debug" default:"false"`
+	MTU   uint32 `arg:"--mtu" default:"2382"`
 }
 
 func (__args__) Version() string {
-	return "YTelenet 0.6.6"
+	return "YTelenet 0.6.8"
 }
 
 var args __args__
@@ -54,13 +55,14 @@ func main() {
 			log.Fatalf("Failed to parse clients.json: %v", err)
 		}
 
-		vpn.ServerMain(interrupt, clients, args.Debug)
+		vpn.ServerMain(interrupt, clients, args.MTU, args.Debug)
 	} else if args.Client != nil {
 		vpn.ClientMain(
 			interrupt,
 			args.Client.Token,
 			args.Debug,
 			&vpn.TunnelOptions{
+				MTU:         args.MTU,
 				Target:      args.Client.Target,
 				NoAutoRoute: args.Client.NoAutoRoute,
 				Dns:         args.Client.Dns,

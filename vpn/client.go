@@ -68,7 +68,7 @@ func ClientMain(
 	defer tunnel.Close()
 
 	go func() {
-		buf := make([]byte, 1186)
+		buf := make([]byte, opts.MTU)
 
 		for {
 			size, err := tunnel.Read(buf)
@@ -78,6 +78,10 @@ func ClientMain(
 			}
 			if err != nil {
 				log.Fatalf("Failed to read from tunnel: %v\n", err)
+			}
+
+			if size < 20 {
+				continue
 			}
 
 			node.Send(bytes.Clone(buf[:size]))

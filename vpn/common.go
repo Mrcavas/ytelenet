@@ -22,6 +22,7 @@ func makeInternalLog(debug bool) *log.Logger {
 }
 
 type TunnelOptions struct {
+	MTU         uint32
 	Target      string
 	NoAutoRoute bool
 	Dns         string
@@ -34,7 +35,8 @@ func makeAndStartTunnel(
 	mask := 24
 
 	tunnelOpts := tun.Options{
-		MTU: 1186,
+		MTU:          opts.MTU,
+		Inet4Gateway: netip.MustParseAddr("42.42.42.1"),
 	}
 
 	if fd == nil {

@@ -45,6 +45,7 @@ func (wr androidLogWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func Start(
 	fd int, token string, onLog AndroidLogFunction,
 	onConnected AndroidVoidFunction,
@@ -70,6 +71,7 @@ func Start(
 	}()
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func Stop() {
 	log.Debugf("stopChan <- struct{}{}")
 
@@ -135,7 +137,7 @@ func androidMain(
 	}
 
 	go func() {
-		buf := make([]byte, 1186)
+		buf := make([]byte, opts.MTU)
 
 		for {
 			size, err := tunnel.Read(buf)

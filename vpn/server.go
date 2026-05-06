@@ -8,7 +8,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func ServerMain(interrupt chan os.Signal, clients *ClientsDB, debug bool) {
+func ServerMain(
+	interrupt chan os.Signal, clients *ClientsDB, MTU uint32, debug bool,
+) {
 	log.Infof("Launching server\n")
 
 	internalLog := makeInternalLog(debug)
@@ -20,11 +22,13 @@ func ServerMain(interrupt chan os.Signal, clients *ClientsDB, debug bool) {
 	}
 	defer nodes.Stop()
 
-	tunnel := makeAndStartTunnel(internalLog, false, 1, nil, nil)
+	tunnel := makeAndStartTunnel(
+		internalLog, false, 1, &TunnelOptions{MTU: MTU}, nil,
+	)
 	defer tunnel.Close()
 
 	go func() {
-		buf := make([]byte, 1186)
+		buf := make([]byte, MTU)
 
 		for {
 			size, err := tunnel.Read(buf)

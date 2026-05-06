@@ -109,11 +109,13 @@ func (man *NodeManager) TryReconnect(idx int, client ClientData, tryIdx int) {
 		return
 	}
 
-	// if tryIdx == 3 {
-	//   log.Errorln("Reconnection failed")
-	//   man.Stop()
-	//   return
-	// }
+	if tryIdx == 3 {
+		log.Errorln("Reconnection failed")
+		man.Stop()
+		return
+	}
+
+	log.Warnf("Node %v stopped, trying to reconnect", client.Name)
 
 	<-time.After( /*time.Duration(tryIdx) * */ 2 * time.Second)
 
