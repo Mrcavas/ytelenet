@@ -1,13 +1,56 @@
 package ytnode
 
 import (
+	"bytes"
+	_ "embed"
+	"errors"
+	"io"
 	"iter"
 	"time"
 
 	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v4/pkg/media/ivfreader"
 )
 
 const RTPMaxPacketSize = 1200
+
+//go:embed dummy.ivf
+var dummyIVFBytes []byte
+
+var DummyFrames [][]byte = nil
+
+func InitDummyFrames() error {
+	if DummyFrames != nil {
+		return nil
+	}
+
+	reader := bytes.NewReader(dummyIVFBytes)
+	ivf, _, err := ivfreader.NewWith(reader)
+	if err != nil {
+		return err
+	}
+
+	for {
+		frameBytes, _, err := ivf.ParseNextFrame()
+		if errors.Is(err, io.EOF) {
+			break // End of animation
+		}
+		if err != nil {
+			return err
+		}
+
+		frameCopy := make([]byte, len(frameBytes))
+		copy(frameCopy, frameBytes)
+
+		DummyFrames = append(DummyFrames, frameCopy)
+	}
+
+	if len(DummyFrames) == 0 {
+		return errors.New("no frames found in embedded dummy.ivf")
+	}
+
+	return nil
+}
 
 type RTPConstructor struct {
 	startTime     time.Time
@@ -122,17 +165,17 @@ func (c *RTPConstructor) NewDummyPacket() *rtp.Packet {
 	c.picCount++
 	picId := c.picCount & 0x7FFF
 
-	c.p.Payload = c.payloadBuf[:7] // 4 (Descriptor) + 3 (p-frame Tag)
+	frameBytes := DummyFrames[c.picCount%uint32(len(DummyFrames))]
+
+	totalLen := 4 + len(frameBytes) // 4 (Descriptor) + colored frame
+	c.p.Payload = c.payloadBuf[:totalLen]
 
 	c.p.Payload[0] = 0b10010000
 	c.p.Payload[1] = 0b10000000
 	c.p.Payload[2] = 0x80 | byte((picId>>8)&0x7F)
 	c.p.Payload[3] = byte(picId & 0xFF)
 
-	// p-frame tag: Keyframe=1 (bit 0), Show=0 (bit 4), PartSize=0
-	c.p.Payload[4] = 0x01
-	c.p.Payload[5] = 0x00
-	c.p.Payload[6] = 0x00
+	copy(c.p.Payload[4:], frameBytes)
 
 	c.seqNumber++
 	c.p.Marker = true
@@ -201,6 +244,15 @@ func (e *RTPExtractor) Extract(packet *rtp.Packet) ([]byte, bool) {
 	}
 
 	if packet.Marker && isStart { // это начало и конец (т.е. один пакет)
+		vp8Payload := payload[offset:]
+
+		for _, dummyFrame := range DummyFrames {
+			if bytes.Equal(vp8Payload, dummyFrame) {
+				// это пустышка, дропаем.
+				return []byte{}, true
+			}
+		}
+
 		// VP8 Payload Header. LSB первого байта - флаг типа кадра (0 = Keyframe)
 		isKeyframe := (payload[offset] & 0x01) == 0
 		if !isKeyframe {

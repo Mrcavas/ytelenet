@@ -103,7 +103,17 @@
       "SET_ACTIVE_CODECS_MODE_VIDEO_ONLY"
     ],
     "subscriberDtlsPassiveMode": [
-      "SUBSCRIBER_DTLS_PASSIVE_MODE_DISABLED"
+      "SUBSCRIBER_DTLS_PASSIVE_MODE_DISABLED",
+      "SUBSCRIBER_DTLS_PASSIVE_MODE_ENABLED"
+    ],
+    "publisherOpusDred": [
+      "PUBLISHER_OPUS_DRED_DISABLED"
+    ],
+    "publisherOpusLowBitrate": [
+      "PUBLISHER_OPUS_LOW_BITRATE_DISABLED"
+    ],
+    "sdkAndroidDestroySessionOnTaskRemoved": [
+      "SDK_ANDROID_DESTROY_SESSION_ON_TASK_REMOVED_DISABLED"
     ],
     "svcModes": [
       "FALSE"
@@ -117,7 +127,7 @@
   },
   "sdkInfo": {
     "implementation": "browser",
-    "version": "5.22.0",
+    "version": "5.28.0",
     "hwConcurrency": 8
   },
   "disablePublisher": false,

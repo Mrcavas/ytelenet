@@ -60,6 +60,7 @@ func Start(
 	go func() {
 		err := androidMain(
 			stopChan, token, &TunnelOptions{
+				MTU: 2382,
 				Dns: "8.8.8.8",
 			}, fd, onConnected.Exec,
 		)

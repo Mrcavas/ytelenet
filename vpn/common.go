@@ -35,14 +35,14 @@ func makeAndStartTunnel(
 	mask := 24
 
 	tunnelOpts := tun.Options{
-		MTU:          opts.MTU,
-		Inet4Gateway: netip.MustParseAddr("42.42.42.1"),
+		MTU: opts.MTU,
 	}
 
 	if fd == nil {
 		tunnelOpts.Name = "YTelenet"
 		tunnelOpts.AutoRoute = isClient && !opts.NoAutoRoute
 		tunnelOpts.StrictRoute = isClient
+		tunnelOpts.Inet4Gateway = netip.MustParseAddr("42.42.42.1")
 		tunnelOpts.Inet4Address = []netip.Prefix{
 			netip.MustParsePrefix(fmt.Sprintf("42.42.42.%v/%v", pcNum, mask)),
 		}

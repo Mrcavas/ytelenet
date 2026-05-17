@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"time"
 
@@ -16,8 +17,11 @@ const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Ge
 func (yt *YTClient) Initialize() error {
 	yt.log.Debugf("Initializing HTTP\n")
 
+	jar, _ := cookiejar.New(nil)
+
 	yt.http = &http.Client{
 		Timeout: 5 * time.Second,
+		Jar:     jar,
 	}
 
 	reqUrl := fmt.Sprintf(

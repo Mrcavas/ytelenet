@@ -7,9 +7,11 @@ import android.net.VpnService
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import androidx.annotation.RequiresApi
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
 import me.d0a1.ytelenet.ConnectionState
 import me.d0a1.ytelenet.MainActivity
 import me.d0a1.ytelenet.R

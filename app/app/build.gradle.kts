@@ -15,10 +15,10 @@ android {
 
 	defaultConfig {
 		applicationId = "me.d0a1.ytelenet"
-		minSdk = 31
+		minSdk = 30
 		targetSdk = 36
 		versionCode = 1
-		versionName = "0.1.1-0.6.6"
+		versionName = "0.1.1-0.6.9"
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 	}

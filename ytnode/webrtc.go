@@ -12,23 +12,25 @@ import (
 
 func (yt *YTClient) InitializeRTC() error {
 	yt.log.Infof("Initializing WebRTC\n")
-	slots, err := GetDefaultPayload[SetSlotsPayload]("setSlots")
+	slots1, err := GetDefaultPayload[SetSlotsPayload]("setSlots1")
+	if err != nil {
+		return err
+
+	}
+	slots2, err := GetDefaultPayload[SetSlotsPayload]("setSlots2")
 	if err != nil {
 		return err
 
 	}
 
-	slots.Key = 1
 	yt.SendWS(
 		&WSMessageOutgoing{
-			SetSlots: slots,
+			SetSlots: slots1,
 		},
 	)
-
-	slots.Key = 2
 	yt.SendWS(
 		&WSMessageOutgoing{
-			SetSlots: slots,
+			SetSlots: slots2,
 		},
 	)
 
@@ -155,6 +157,82 @@ func (yt *YTClient) StreamToDataTrack(track *webrtc.TrackLocalStaticRTP) {
 		}
 	}
 }
+
+// func (yt *YTClient) StreamToDataTrack(track *webrtc.TrackLocalStaticRTP) {
+//   yt.log.Infof("Started streaming REAL video to '%v'\n", yt.targetName)
+//
+//   videoFilePath := "video.ivf"
+//
+//   // Set up Pion's native RTP packetizer for VP8
+//   payloader := &codecs.VP8Payloader{
+//     EnablePictureID: true,
+//   }
+//   sequencer := rtp.NewRandomSequencer()
+//
+//   // RTP timestamp clock rate for VP8 is always 90,000 Hz
+//   packetizer := rtp.NewPacketizer(
+//     1200, // MTU
+//     96,   // Payload Type
+//     0,    // SSRC
+//     payloader,
+//     sequencer,
+//     90000,
+//   )
+//
+//   // Loop the video infinitely
+//   for {
+//     err := streamIVF(videoFilePath, track, packetizer, yt)
+//     if err != nil {
+//       yt.log.Errorf("Video stream loop ended/error: %v. Restarting...", err)
+//       time.Sleep(1 * time.Second)
+//     }
+//   }
+// }
+//
+// // streamIVF plays the file once until EOF, then returns nil
+// func streamIVF(
+//   filePath string, track *webrtc.TrackLocalStaticRTP, packetizer rtp.Packetizer,
+//   yt *YTClient,
+// ) error {
+//   file, err := os.Open(filePath)
+//   if err != nil {
+//     return err
+//   }
+//   defer file.Close()
+//
+//   ivf, _, err := ivfreader.NewWith(file)
+//   if err != nil {
+//     return err
+//   }
+//
+//   // 30 FPS = ~33.3 milliseconds per frame
+//   ticker := time.NewTicker(time.Millisecond * 33)
+//   defer ticker.Stop()
+//
+//   for {
+//     frameBytes, _, err := ivf.ParseNextFrame()
+//     if errors.Is(err, io.EOF) {
+//       return nil // End of file, return so outer loop can restart
+//     }
+//     if err != nil {
+//       return err
+//     }
+//
+//     <-ticker.C // Wait for the next 30fps tick
+//
+//     // Packetize the frame.
+//     // The second parameter is the amount of 90kHz ticks to advance the timestamp.
+//     // For 30 FPS: 90,000 / 30 = 3000 ticks per frame.
+//     packets := packetizer.Packetize(frameBytes, 3000)
+//
+//     // Write all resulting RTP packets for this frame to the track
+//     for _, p := range packets {
+//       if err := track.WriteRTP(p); err != nil {
+//         return err
+//       }
+//     }
+//   }
+// }
 
 func DrainTrack(track *webrtc.TrackRemote) {
 	for {

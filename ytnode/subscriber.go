@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -27,7 +28,15 @@ func (yt *YTClient) InitRTCSubscriber(
 	if err != nil {
 		return err
 	}
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
+
+	i := &interceptor.Registry{}
+	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
+		return err
+	}
+
+	api := webrtc.NewAPI(
+		webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(i),
+	)
 
 	pc, err := api.NewPeerConnection(
 		webrtc.Configuration{

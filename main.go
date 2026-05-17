@@ -27,7 +27,7 @@ type __args__ struct {
 }
 
 func (__args__) Version() string {
-	return "YTelenet 0.6.8"
+	return "YTelenet 0.6.9"
 }
 
 var args __args__

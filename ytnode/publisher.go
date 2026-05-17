@@ -46,13 +46,17 @@ func (yt *YTClient) InitRTCPublisher(
 		return fmt.Errorf("failed to create publisher audio track: %w", err)
 	}
 
-	if _, err := pc.AddTrack(audioTrack); err != nil {
+	audioRtpSender, err := pc.AddTrack(audioTrack)
+	if err != nil {
 		return fmt.Errorf("failed to add publisher audio track: %w", err)
 	}
+	go DrainRTP(audioRtpSender)
 
-	if _, err := pc.AddTrack(dataTrack); err != nil {
+	dataRtpSender, err := pc.AddTrack(dataTrack)
+	if err != nil {
 		return fmt.Errorf("failed to add publisher data track: %w", err)
 	}
+	go DrainRTP(dataRtpSender)
 
 	pc.OnICECandidate(
 		func(candidate *webrtc.ICECandidate) {
@@ -148,4 +152,14 @@ func (yt *YTClient) CloseRTCPublisher() error {
 	}
 
 	return yt.rtcPublisher.GracefulClose()
+}
+
+func DrainRTP(rtpSender *webrtc.RTPSender) {
+	rtcpBuf := make([]byte, 1500)
+	for {
+		// Continuously read from the sender to prevent buffer buildup
+		if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
+			return // Connection closed
+		}
+	}
 }

@@ -31,6 +31,10 @@ func MakeNew(log *logrus.Logger, roomUrl, name, target string) (
 		return nil, fmt.Errorf("failed to initialize default payloads: %w", err)
 	}
 
+	if err := InitDummyFrames(); err != nil {
+		return nil, fmt.Errorf("failed to initialize dummy frames: %w", err)
+	}
+
 	yt := NewYTClient(log, roomUrl, name, target)
 	node.yt = yt
 

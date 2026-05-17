@@ -6,7 +6,7 @@
       "transceiverMid": "0",
       "kind": "AUDIO",
       "priority": 0,
-      "label": "Microphone (fifine Microphone)",
+      "label": "Default microphone",
       "codecs": {},
       "groupId": 1,
       "description": ""
@@ -16,7 +16,7 @@
       "transceiverMid": "1",
       "kind": "VIDEO",
       "priority": 0,
-      "label": "USB2.0 HD UVC WebCam",
+      "label": "Default camera",
       "codecs": {},
       "groupId": 1,
       "description": ""
