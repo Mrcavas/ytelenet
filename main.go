@@ -1,72 +1,82 @@
 package main
 
 import (
-	// "fmt"
-	"os"
-	"os/signal"
-	"ytelenet/vpn"
+  // "fmt"
+  "os"
+  "os/signal"
+  "ytelenet/vpn"
+  "ytelenet/ytnode"
 
-	"github.com/alexflint/go-arg"
-	log "github.com/sirupsen/logrus"
+  "github.com/alexflint/go-arg"
+  log "github.com/sirupsen/logrus"
 )
 
 type ClientCmd struct {
-	Token       string `arg:"positional,required"`
-	Dns         string `arg:"--dns" default:"8.8.8.8"`
-	NoAutoRoute bool   `arg:"--no-auto-route"`
-	Target      string `arg:"--to" default:"server"`
+  Token       string `arg:"positional,required"`
+  Dns         string `arg:"--dns" default:"8.8.8.8"`
+  NoAutoRoute bool   `arg:"--no-auto-route"`
+  Target      string `arg:"--to" default:"server"`
 }
 type ServerCmd struct{}
 
 type __args__ struct {
-	Client *ClientCmd `arg:"subcommand:client"`
-	Server *ServerCmd `arg:"subcommand:server"`
+  Client *ClientCmd `arg:"subcommand:client"`
+  Server *ServerCmd `arg:"subcommand:server"`
 
-	Debug bool   `arg:"--debug" default:"false"`
-	MTU   uint32 `arg:"--mtu" default:"2382"`
+  Debug bool   `arg:"--debug" default:"false"`
+  MTU   uint32 `arg:"--mtu" default:"1500"`
+
+  MaxBatchSize int `arg:"-b,--batch" default:"200"`
+  FPS          int `arg:"-f,--fps" default:"90"`
 }
 
 func (__args__) Version() string {
-	return "YTelenet 0.6.9"
+  return "YTelenet 0.7.0"
 }
 
 var args __args__
 
 func main() {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+  interrupt := make(chan os.Signal, 1)
+  signal.Notify(interrupt, os.Interrupt)
 
-	log.SetFormatter(
-		&log.TextFormatter{
-			FullTimestamp:   true,
-			ForceColors:     true,
-			TimestampFormat: "15:04:05.000",
-		},
-	)
+  log.SetFormatter(
+    &log.TextFormatter{
+      FullTimestamp:   true,
+      ForceColors:     true,
+      TimestampFormat: "15:04:05.000",
+    },
+  )
 
-	p := arg.MustParse(&args)
-	if p.Subcommand() == nil {
-		p.Fail("Must select working mode")
-	}
+  p := arg.MustParse(&args)
+  if p.Subcommand() == nil {
+    p.Fail("Must select working mode")
+  }
 
-	if args.Server != nil {
-		clients, err := vpn.ParseClients()
-		if err != nil {
-			log.Fatalf("Failed to parse clients.json: %v", err)
-		}
+  batchingOpts := ytnode.BatchingOptions{
+    MaxBatchSize: args.MaxBatchSize,
+    FPS:          args.FPS,
+  }
 
-		vpn.ServerMain(interrupt, clients, args.MTU, args.Debug)
-	} else if args.Client != nil {
-		vpn.ClientMain(
-			interrupt,
-			args.Client.Token,
-			args.Debug,
-			&vpn.TunnelOptions{
-				MTU:         args.MTU,
-				Target:      args.Client.Target,
-				NoAutoRoute: args.Client.NoAutoRoute,
-				Dns:         args.Client.Dns,
-			},
-		)
-	}
+  if args.Server != nil {
+    clients, err := vpn.ParseClients()
+    if err != nil {
+      log.Fatalf("Failed to parse clients.json: %v", err)
+    }
+
+    vpn.ServerMain(interrupt, clients, args.MTU, args.Debug, batchingOpts)
+  } else if args.Client != nil {
+    vpn.ClientMain(
+      interrupt,
+      args.Client.Token,
+      args.Debug,
+      vpn.TunnelOptions{
+        MTU:         args.MTU,
+        Target:      args.Client.Target,
+        NoAutoRoute: args.Client.NoAutoRoute,
+        Dns:         args.Client.Dns,
+      },
+      batchingOpts,
+    )
+  }
 }

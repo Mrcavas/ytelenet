@@ -1,157 +1,160 @@
 package vpn
 
 import (
-	"bytes"
-	"fmt"
-	"sync"
-	"time"
-	"ytelenet/ytnode"
+  "bytes"
+  "fmt"
+  "sync"
+  "time"
+  "ytelenet/ytnode"
 
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
+  log "github.com/sirupsen/logrus"
+  "golang.org/x/sync/errgroup"
 )
 
 type NodeManager struct {
-	internalLog *log.Logger
-	db          *ClientsDB
-	nodes       []*ytnode.Node
-	pcNumToIdx  map[byte]int
+  internalLog  *log.Logger
+  batchingOpts ytnode.BatchingOptions
+  db           *ClientsDB
+  nodes        []*ytnode.Node
+  pcNumToIdx   map[byte]int
 
-	allDataIn chan []byte
+  allDataIn chan []byte
 
-	stopped bool
+  stopped bool
 }
 
-func MakeClientsManager(
-	internalLog *log.Logger, db *ClientsDB,
+func MakeNodesManager(
+  internalLog *log.Logger, db *ClientsDB, batchingOpts ytnode.BatchingOptions,
 ) (*NodeManager, error) {
-	amount := len(db.Clients)
+  amount := len(db.Clients)
 
-	man := &NodeManager{
-		internalLog: internalLog,
-		db:          db,
-		nodes:       make([]*ytnode.Node, amount),
+  man := &NodeManager{
+    internalLog:  internalLog,
+    batchingOpts: batchingOpts,
+    db:           db,
+    nodes:        make([]*ytnode.Node, amount),
 
-		pcNumToIdx: make(map[byte]int, amount),
+    pcNumToIdx: make(map[byte]int, amount),
 
-		allDataIn: make(chan []byte, 8192),
-	}
+    allDataIn: make(chan []byte, 8192),
+  }
 
-	g := new(errgroup.Group)
+  g := new(errgroup.Group)
 
-	for i, client := range db.Clients {
-		man.pcNumToIdx[client.PcNum] = i
+  for i, client := range db.Clients {
+    man.pcNumToIdx[client.PcNum] = i
 
-		g.Go(
-			func() error {
-				return makeNode(i, man, internalLog, client)
-			},
-		)
-	}
+    g.Go(
+      func() error {
+        return makeNode(i, man, internalLog, client)
+      },
+    )
+  }
 
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
+  if err := g.Wait(); err != nil {
+    return nil, err
+  }
 
-	for i, client := range db.Clients {
-		go man.handleNode(i, client)
-	}
+  for i, client := range db.Clients {
+    go man.handleNode(i, client)
+  }
 
-	return man, nil
+  return man, nil
 }
 
 func makeNode(
-	idx int, man *NodeManager, internalLog *log.Logger, client ClientData,
+  idx int, man *NodeManager, internalLog *log.Logger, client ClientData,
 ) error {
-	node, err := ytnode.MakeNew(
-		internalLog,
-		makeRoomUrl(client.RoomId),
-		"server",
-		client.Name,
-	)
-	if err != nil {
-		return err
-	}
+  node, err := ytnode.MakeNew(
+    internalLog,
+    makeRoomUrl(client.RoomId),
+    "server",
+    client.Name,
+    man.batchingOpts,
+  )
+  if err != nil {
+    return err
+  }
 
-	select {
-	case st := <-node.Events():
-		if st != ytnode.ConnectedState {
-			return fmt.Errorf("unable to connect to node %v", client.Name)
-		}
-	case <-time.After(15 * time.Second):
-		return fmt.Errorf("unable to connect to node - connection timeout")
-	}
+  select {
+  case st := <-node.Events():
+    if st != ytnode.ConnectedState {
+      return fmt.Errorf("unable to connect to node %v", client.Name)
+    }
+  case <-time.After(15 * time.Second):
+    return fmt.Errorf("unable to connect to node - connection timeout")
+  }
 
-	man.nodes[idx] = node
-	return nil
+  man.nodes[idx] = node
+  return nil
 }
 
 func (man *NodeManager) handleNode(idx int, client ClientData) {
-	node := man.nodes[idx]
+  node := man.nodes[idx]
 
-	for {
-		select {
-		case buf := <-node.Data():
-			man.allDataIn <- bytes.Clone(buf)
+  for {
+    select {
+    case buf := <-node.Data():
+      man.allDataIn <- bytes.Clone(buf)
 
-		case state := <-node.Events():
-			if state == ytnode.StoppedState {
-				man.nodes[idx] = nil
-				go man.TryReconnect(idx, client, 0)
-				return
-			}
-		}
-	}
+    case state := <-node.Events():
+      if state == ytnode.StoppedState {
+        man.nodes[idx] = nil
+        go man.TryReconnect(idx, client, 0)
+        return
+      }
+    }
+  }
 }
 
 func (man *NodeManager) TryReconnect(idx int, client ClientData, tryIdx int) {
-	if man.stopped {
-		return
-	}
+  if man.stopped {
+    return
+  }
 
-	if tryIdx == 3 {
-		log.Errorln("Reconnection failed")
-		man.Stop()
-		return
-	}
+  if tryIdx == 3 {
+    log.Errorln("Reconnection failed")
+    man.Stop()
+    return
+  }
 
-	log.Warnf("Node %v stopped, trying to reconnect", client.Name)
+  log.Warnf("Node %v stopped, trying to reconnect", client.Name)
 
-	<-time.After( /*time.Duration(tryIdx) * */ 2 * time.Second)
+  <-time.After(/*time.Duration(tryIdx) * */ 2 * time.Second)
 
-	err := makeNode(idx, man, man.internalLog, client)
-	if err != nil {
-		man.TryReconnect(idx, client, tryIdx+1)
-		return
-	}
+  err := makeNode(idx, man, man.internalLog, client)
+  if err != nil {
+    man.TryReconnect(idx, client, tryIdx+1)
+    return
+  }
 
-	go man.handleNode(idx, client)
+  go man.handleNode(idx, client)
 }
 
 func (man *NodeManager) SendTo(pcNum byte, buf []byte) {
-	idx, ok := man.pcNumToIdx[pcNum]
-	if !ok {
-		log.Debugf("Failed to get node index for pcNum %v", pcNum)
-		return
-	}
+  idx, ok := man.pcNumToIdx[pcNum]
+  if !ok {
+    log.Debugf("Failed to get node index for pcNum %v", pcNum)
+    return
+  }
 
-	if man.nodes[idx] != nil {
-		man.nodes[idx].Send(buf)
-	}
+  if man.nodes[idx] != nil {
+    man.nodes[idx].Send(buf)
+  }
 }
 
 func (man *NodeManager) Data() <-chan []byte {
-	return man.allDataIn
+  return man.allDataIn
 }
 
 func (man *NodeManager) Stop() {
-	man.stopped = true
+  man.stopped = true
 
-	var wg sync.WaitGroup
-	for _, node := range man.nodes {
-		if node != nil {
-			wg.Go(node.Stop)
-		}
-	}
-	wg.Wait()
+  var wg sync.WaitGroup
+  for _, node := range man.nodes {
+    if node != nil {
+      wg.Go(node.Stop)
+    }
+  }
+  wg.Wait()
 }
