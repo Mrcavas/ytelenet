@@ -1,0 +1,19 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Build Server" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="ytelenet" />
+    <target name="@@@LOCAL@@@" />
+    <working_directory value="$PROJECT_DIR$" />
+    <go_parameters value="-gcflags=&quot;-B -l -l -l -l&quot; -ldflags=&quot;-s -w&quot; -o .build/ytelenet" />
+    <envs>
+      <env name="GOOS" value="linux" />
+      <env name="GOARCH" value="amd64" />
+    </envs>
+    <kind value="PACKAGE" />
+    <package value="ytelenet" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <output_directory value="$PROJECT_DIR$/.build" />
+    <option name="run" value="false" />
+    <method v="2" />
+  </configuration>
+</component>

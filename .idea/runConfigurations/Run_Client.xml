@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run Client" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="ytelenet" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="client 91598352795911 -a 1 --debug" />
+    <sudo value="true" />
+    <kind value="PACKAGE" />
+    <package value="ytelenet" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>
