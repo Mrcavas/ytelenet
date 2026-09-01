@@ -18,7 +18,7 @@ func (yt *YTClient) InitializeWS() error {
 
 	headers := make(http.Header)
 	headers.Set("Origin", "https://telemost.yandex.ru")
-	headers.Set("User-Agent", DefaultUserAgent)
+	headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 YaBrowser/26.8.0.1782 Yowser/2.5 Safari/537.36")
 
 	wsUrl := yt.InitData.ClientConfiguration.MediaServerURL
 	ws, _, err := websocket.DefaultDialer.Dial(wsUrl, headers)
