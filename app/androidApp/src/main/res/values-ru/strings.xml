@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="disconnect">Отключиться</string>
+    <string name="status_chan_name">Статус</string>
+    <string name="status_chan_description">Показывает текущий статус VPN</string>
+    <string name="status_notif_description">Подключено и работает в фоне</string>
+</resources>

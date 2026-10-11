@@ -19,5 +19,9 @@ dependencyResolutionManagement {
 	}
 }
 
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
 rootProject.name = "YTelenet"
-include(":app")
+include(":shared")
+include(":androidApp")
+include(":desktopApp")
