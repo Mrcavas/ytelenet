@@ -54,8 +54,8 @@ type YTClient struct {
 }
 
 type BatchingOptions struct {
+	// max RTP packets in one video frame
 	MaxBatchSize int
-	FPS          int
 }
 
 func NewYTClient(
@@ -94,6 +94,7 @@ func (yt *YTClient) handleWSMessage(msg *WSMessageIncoming) error {
 	switch {
 	case msg.ServerHello != nil:
 		yt.log.Debugf("Got ServerHello!")
+		yt.log.Debugln(prettifyJson(msg.Raw))
 		yt.ServerHello = msg.ServerHello
 		yt.wsInitialized <- struct{}{}
 

@@ -5,14 +5,36 @@ import (
 	_ "embed"
 	"errors"
 	"io"
-	"iter"
 	"time"
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4/pkg/media/ivfreader"
 )
 
+// RTPMaxPacketSize is the max RTP payload size (same as browsers use, safe for
+// mobile networks with small path MTU)
 const RTPMaxPacketSize = 1200
+
+const (
+	vp8DescriptorLen = 4
+	vp8HeaderLen     = 10
+
+	// every IP packet (or a fragment of it) inside an RTP payload is prefixed
+	// with a 2-byte chunk header: 2 flag bits + 14 bits of length
+	chunkHeaderLen  = 2
+	chunkMore       = 0x8000 // the packet continues in the next RTP packet
+	chunkContinued  = 0x4000 // this chunk continues a packet from the previous RTP packet
+	chunkLengthMask = 0x3FFF
+
+	// don't start a chunk in an RTP packet with less space than that, fragmenting
+	// a packet into a tiny piece isn't worth it
+	minChunkSpace = 64
+)
+
+// MaxTunnelMTU is the largest IP packet that always fits into a single RTP
+// packet. Bigger packets are fragmented, and losing any fragment loses the
+// packet.
+const MaxTunnelMTU = RTPMaxPacketSize - vp8DescriptorLen - vp8HeaderLen - chunkHeaderLen
 
 //go:embed dummy.ivf
 var dummyIVFBytes []byte
@@ -52,13 +74,24 @@ func InitDummyFrames() error {
 	return nil
 }
 
+// RTPConstructor packs IP packets into fake VP8 keyframes.
+//
+// Unlike a real VP8 frame, every RTP packet of the frame can be parsed on its
+// own: it contains whole IP packets (and at most one fragment at each end).
+// The SFU tail-drops packets that exceed its bandwidth allocation, so this way
+// a dropped RTP packet costs only the IP packets inside it, not the whole
+// frame.
 type RTPConstructor struct {
 	startTime     time.Time
 	picCount      uint32
 	seqNumber     uint16
-	payloadBuf    [RTPMaxPacketSize]byte
 	lastTimestamp uint32
 	p             rtp.Packet
+
+	// payloads of the frame being built, the last one is being filled
+	payloads [][]byte
+	picId    uint32
+	inFrame  bool
 }
 
 func NewRTPConstructor() *RTPConstructor {
@@ -74,91 +107,144 @@ func NewRTPConstructor() *RTPConstructor {
 }
 
 func (c *RTPConstructor) NewTimestamp() uint32 {
-	// timestamp := c.lastTimestamp + 1
 	timestamp := uint32(90_000 * time.Since(c.startTime).Seconds())
-	if c.lastTimestamp == timestamp {
-		timestamp++
+	if timestamp <= c.lastTimestamp {
+		timestamp = c.lastTimestamp + 1
 	}
 
 	c.lastTimestamp = timestamp
 	return timestamp
 }
 
-func (c *RTPConstructor) NewPackets(buf []byte) iter.Seq[*rtp.Packet] {
-	return func(yield func(*rtp.Packet) bool) {
-		timestamp := c.NewTimestamp()
-		c.picCount++
-		picId := c.picCount & 0x7FFF
+// FramePackets returns the amount of RTP packets in the current frame
+// (including the one being filled)
+func (c *RTPConstructor) FramePackets() int {
+	return len(c.payloads)
+}
 
-		remaining := buf
-		isFirst := true
+func (c *RTPConstructor) BeginFrame() {
+	c.picCount++
+	c.picId = c.picCount & 0x7FFF
+	c.inFrame = true
+	c.payloads = c.payloads[:0]
+	c.startPacket()
+}
 
-		for len(remaining) > 0 {
-			chunkSize := len(remaining)
-			headerLen := 4
+func (c *RTPConstructor) startPacket() {
+	first := len(c.payloads) == 0
 
-			if isFirst {
-				headerLen += 10
-			}
+	// reuse the buffers of the previous frames
+	var buf []byte
+	if len(c.payloads) < cap(c.payloads) {
+		buf = c.payloads[:len(c.payloads)+1][len(c.payloads)][:0]
+	}
+	if buf == nil {
+		buf = make([]byte, 0, RTPMaxPacketSize)
+	}
 
-			if chunkSize+headerLen > RTPMaxPacketSize {
-				chunkSize = RTPMaxPacketSize - headerLen
-			}
+	buf = buf[:vp8DescriptorLen]
+	c.FillPayloadDescriptor(buf, c.picId, first)
+	if first {
+		buf = buf[:vp8DescriptorLen+vp8HeaderLen]
+		c.FillPayloadHeader(buf)
+	}
+	c.payloads = append(c.payloads, buf)
+}
 
-			chunk := remaining[:chunkSize]
-			remaining = remaining[chunkSize:]
+func (c *RTPConstructor) current() *[]byte {
+	return &c.payloads[len(c.payloads)-1]
+}
 
-			isLast := len(remaining) == 0
+func (c *RTPConstructor) appendChunk(header uint16, chunk []byte) {
+	cur := c.current()
+	*cur = append(*cur, byte(header>>8), byte(header))
+	*cur = append(*cur, chunk...)
+}
 
-			c.p.Payload = c.payloadBuf[:headerLen+len(chunk)]
-			c.FillPayloadDescriptor(picId, isFirst)
-			if isFirst {
-				c.FillPayloadHeader()
-			}
+// Add appends an IP packet to the current frame
+func (c *RTPConstructor) Add(buf []byte) {
+	continued := false
 
-			copy(c.p.Payload[headerLen:], chunk)
+	for {
+		space := RTPMaxPacketSize - len(*c.current()) - chunkHeaderLen
+		if space < len(buf) && space < minChunkSpace {
+			c.startPacket()
+			continue
+		}
 
-			c.seqNumber++
-			c.p.Marker = isLast
-			c.p.SequenceNumber = c.seqNumber
-			c.p.Timestamp = timestamp
+		chunk := buf[:min(space, len(buf))]
+		buf = buf[len(chunk):]
 
-			if !yield(&c.p) {
-				return
-			}
+		header := uint16(len(chunk))
+		if continued {
+			header |= chunkContinued
+		}
+		if len(buf) > 0 {
+			header |= chunkMore
+		}
 
-			isFirst = false
+		c.appendChunk(header, chunk)
+
+		if len(buf) == 0 {
+			return
+		}
+
+		// the rest goes to the next RTP packet
+		c.startPacket()
+		continued = true
+	}
+}
+
+// EndFrame writes out the RTP packets of the frame
+func (c *RTPConstructor) EndFrame(write func(*rtp.Packet) error) error {
+	if !c.inFrame {
+		return nil
+	}
+	c.inFrame = false
+
+	timestamp := c.NewTimestamp()
+	for i, payload := range c.payloads {
+		c.seqNumber++
+		c.p.Payload = payload
+		c.p.Marker = i == len(c.payloads)-1
+		c.p.SequenceNumber = c.seqNumber
+		c.p.Timestamp = timestamp
+
+		if err := write(&c.p); err != nil {
+			return err
 		}
 	}
+
+	return nil
 }
 
-func (c *RTPConstructor) FillPayloadDescriptor(picId uint32, start bool) {
+func (c *RTPConstructor) FillPayloadDescriptor(buf []byte, picId uint32, start bool) {
 	// --- VP8 RTP Payload Descriptor ---
-	c.p.Payload[0] = 0b10000000 // X=1 (расширения)
+	buf[0] = 0b10000000 // X=1 (расширения)
 	if start {
-		c.p.Payload[0] = 0b10010000 // X=1, S=1 (начало партиции)
+		buf[0] = 0b10010000 // X=1, S=1 (начало партиции)
 	}
-	c.p.Payload[1] = 0b10000000 // I=1 (присутствует PictureID)
-	c.p.Payload[2] = 0x80 | byte((picId>>8)&0x7F)
-	c.p.Payload[3] = byte(picId & 0xFF)
+	buf[1] = 0b10000000 // I=1 (присутствует PictureID)
+	buf[2] = 0x80 | byte((picId>>8)&0x7F)
+	buf[3] = byte(picId & 0xFF)
 }
 
-func (c *RTPConstructor) FillPayloadHeader() {
+func (c *RTPConstructor) FillPayloadHeader(buf []byte) {
 	// --- VP8 Payload Header ---
-	c.p.Payload[4] = 0b00010000 // Бит 0 = 0 (Это Keyframe), ShowFrame = 1
-	c.p.Payload[5] = 0x00       // Size
-	c.p.Payload[6] = 0x00       // Size
+	buf[4] = 0b00010000 // Бит 0 = 0 (Это Keyframe), ShowFrame = 1
+	buf[5] = 0x00       // Size
+	buf[6] = 0x00       // Size
 
 	// --- VP8 Sync Code ---
-	c.p.Payload[7] = 0x9D
-	c.p.Payload[8] = 0x01
-	c.p.Payload[9] = 0x2A
+	buf[7] = 0x9D
+	buf[8] = 0x01
+	buf[9] = 0x2A
 
 	// --- Resolution (LE) ---
-	c.p.Payload[10] = 0x80
-	c.p.Payload[11] = 0x07 // Width = 1920 (0x0780)
-	c.p.Payload[12] = 0x38
-	c.p.Payload[13] = 0x04 // Height = 1080 (0x0438)
+	buf[10] = 0x80
+	buf[11] = 0x07 // Width = 1920 (0x0780)
+	buf[12] = 0x38
+	buf[13] = 0x04 // Height = 1080 (0x0438)
 }
 
 func (c *RTPConstructor) NewDummyPacket() *rtp.Packet {
@@ -167,8 +253,7 @@ func (c *RTPConstructor) NewDummyPacket() *rtp.Packet {
 
 	frameBytes := DummyFrames[c.picCount%uint32(len(DummyFrames))]
 
-	totalLen := 4 + len(frameBytes) // 4 (Descriptor) + colored frame
-	c.p.Payload = c.payloadBuf[:totalLen]
+	c.p.Payload = make([]byte, 4+len(frameBytes)) // 4 (Descriptor) + colored frame
 
 	c.p.Payload[0] = 0b10010000
 	c.p.Payload[1] = 0b10000000
@@ -185,48 +270,44 @@ func (c *RTPConstructor) NewDummyPacket() *rtp.Packet {
 	return &c.p
 }
 
+// RTPExtractor parses IP packets out of RTP packets made by RTPConstructor
 type RTPExtractor struct {
-	incomplete map[uint16]*IncompletePackets
-}
-
-type IncompletePackets struct {
-	startSeqNumber *uint16
-	endSeqNumber   *uint16
-	bufs           map[uint16][]byte
+	// IP packet fragment from the previous RTP packet
+	pending    []byte
+	pendingSeq uint16
+	hasPending bool
 }
 
 func NewRTPExtractor() *RTPExtractor {
-	return &RTPExtractor{
-		incomplete: make(map[uint16]*IncompletePackets),
-	}
+	return &RTPExtractor{}
 }
 
-func (e *RTPExtractor) Extract(packet *rtp.Packet) ([]byte, bool) {
+// Extract calls emit for every complete IP packet in the RTP packet. The buffer
+// passed to emit is only valid during the call. Returns false if the packet is
+// malformed.
+func (e *RTPExtractor) Extract(packet *rtp.Packet, emit func([]byte)) bool {
 	payload := packet.Payload
 	if len(payload) < 1 {
-		return nil, false
+		return false
 	}
 
 	// Разбор VP8 Payload Descriptor
-	var picId uint16
 	offset := 1
 
 	if (payload[0] & 0b10000000) != 0 { // Бит X (Extension present)
 		if offset >= len(payload) {
-			return nil, false
+			return false
 		}
 		ext := payload[offset]
 		offset++
 
 		if (ext & 0b10000000) != 0 { // Бит I (PictureID present)
 			if offset >= len(payload) {
-				return nil, false
+				return false
 			}
 			if (payload[offset] & 0b10000000) != 0 {
-				picId = uint16(payload[offset+1]) | (uint16(payload[offset]&0b01111111) << 8)
 				offset += 2 // 16-bit PictureID
 			} else {
-				picId = uint16(payload[offset] & 0b01111111)
 				offset += 1 // 8-bit PictureID
 			}
 		}
@@ -239,81 +320,71 @@ func (e *RTPExtractor) Extract(packet *rtp.Packet) ([]byte, bool) {
 	}
 
 	if offset >= len(payload) {
-		return nil, false
+		return false
 	}
 
 	isStart := (payload[0] & 0b00010000) != 0
 
-	if packet.Marker && isStart { // это начало и конец (т.е. один пакет)
-		vp8Payload := payload[offset:]
+	if isStart {
+		if packet.Marker { // это начало и конец (т.е. один пакет)
+			vp8Payload := payload[offset:]
 
-		for _, dummyFrame := range DummyFrames {
-			if bytes.Equal(vp8Payload, dummyFrame) {
-				// это пустышка, дропаем.
-				return []byte{}, true
+			for _, dummyFrame := range DummyFrames {
+				if bytes.Equal(vp8Payload, dummyFrame) {
+					// это пустышка, дропаем.
+					return true
+				}
+			}
+
+			// VP8 Payload Header. LSB первого байта - флаг типа кадра (0 = Keyframe)
+			if (payload[offset] & 0b00000001) != 0 {
+				return true
 			}
 		}
 
-		// assuming this is a data packet from now because we should've filtered out dummy packets now
-		// this is needed because we can't check if the packet is a data packet just with the keyframe
-
-		// VP8 Payload Header. LSB первого байта - флаг типа кадра (0 = Keyframe)
-		isKeyframe := (payload[offset] & 0b00000001) == 0
-		if !isKeyframe {
-			return []byte{}, true
-		}
-
-		offset += 10
+		offset += vp8HeaderLen // в стартовом пакете в любом случае ожидаем Header
 		if offset > len(payload) {
-			return nil, false
+			return false
+		}
+	}
+
+	pendingOk := e.hasPending && packet.SequenceNumber == e.pendingSeq+1
+	e.hasPending = false
+
+	data := payload[offset:]
+	for len(data) > 0 {
+		if len(data) < chunkHeaderLen {
+			return false
 		}
 
-		return payload[offset:], true
-	}
+		header := uint16(data[0])<<8 | uint16(data[1])
+		length := int(header & chunkLengthMask)
+		data = data[chunkHeaderLen:]
 
-	inc, ok := e.incomplete[picId]
-	if !ok {
-		inc = &IncompletePackets{
-			bufs: make(map[uint16][]byte, 2),
+		if len(data) < length {
+			return false
 		}
-		e.incomplete[picId] = inc
-	}
+		chunk := data[:length]
+		data = data[length:]
 
-	if isStart {
-		offset += 10 // в стартовом пакете в любом случае ожидаем Header
-		inc.startSeqNumber = &packet.SequenceNumber
-	}
-
-	if packet.Marker {
-		inc.endSeqNumber = &packet.SequenceNumber
-	}
-
-	inc.bufs[packet.SequenceNumber] = payload[offset:]
-
-	// проверяем, дошли ли все пакеты
-	if inc.endSeqNumber == nil ||
-		inc.startSeqNumber == nil ||
-		len(inc.bufs) != int(1+*inc.endSeqNumber-*inc.startSeqNumber) {
-		return []byte{}, true
-	}
-
-	// если всё дошло, объединяем
-	defer delete(e.incomplete, picId)
-
-	completeLen := 0
-	for _, v := range inc.bufs {
-		completeLen += len(v)
-	}
-
-	completeBuf := make([]byte, completeLen)
-	currentStart := 0
-	for i := *inc.startSeqNumber; i <= *inc.endSeqNumber; i++ {
-		buf, ok := inc.bufs[i]
-		if !ok {
-			return nil, false
+		if header&chunkContinued != 0 {
+			if !pendingOk {
+				// the beginning of the packet was lost
+				continue
+			}
+			pendingOk = false
+			chunk = append(e.pending, chunk...)
 		}
-		currentStart += copy(completeBuf[currentStart:], buf)
+
+		if header&chunkMore != 0 {
+			e.pending = append(e.pending[:0], chunk...)
+			e.pendingSeq = packet.SequenceNumber
+			e.hasPending = true
+			continue
+		}
+
+		emit(chunk)
 	}
 
-	return completeBuf, true
+	return true
 }

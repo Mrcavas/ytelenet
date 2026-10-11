@@ -63,8 +63,7 @@ func Start(
 				MTU: 1500,
 				Dns: "1.1.1.1",
 			}, ytnode.BatchingOptions{
-				MaxBatchSize: 200,
-				FPS:          90,
+				MaxBatchSize: 64,
 			}, fd, onConnected.Exec,
 		)
 		if err != nil {

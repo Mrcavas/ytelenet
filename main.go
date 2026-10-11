@@ -27,8 +27,7 @@ type __args__ struct {
 	Debug bool   `arg:"--debug" default:"false"`
 	MTU   uint32 `arg:"--mtu" default:"1500"`
 
-	MaxBatchSize int `arg:"-b,--batch" default:"200"`
-	FPS          int `arg:"-f,--fps" default:"90"`
+	MaxBatchSize int `arg:"-b,--batch" default:"64" help:"max RTP packets per video frame"`
 }
 
 func (__args__) Version() string {
@@ -56,7 +55,6 @@ func main() {
 
 	batchingOpts := ytnode.BatchingOptions{
 		MaxBatchSize: args.MaxBatchSize,
-		FPS:          args.FPS,
 	}
 
 	if args.Server != nil {

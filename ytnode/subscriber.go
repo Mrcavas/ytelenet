@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/pion/interceptor"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -29,8 +30,12 @@ func (yt *YTClient) InitRTCSubscriber(
 		return err
 	}
 
+	// No NACKs: retransmissions would only eat the bandwidth the SFU gives us,
+	// TCP inside the tunnel recovers the losses itself.
 	i := &interceptor.Registry{}
-	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
+	// must be registered before the report interceptor to wrap its writer
+	i.Add(&noLossFactory{})
+	if err := webrtc.ConfigureRTCPReports(i); err != nil {
 		return err
 	}
 
@@ -133,6 +138,7 @@ func (yt *YTClient) HandleRTCSubscriberOffer(offer string) error {
 		return fmt.Errorf("subscriber PC is nil")
 	}
 
+	yt.log.Debugf("Subscriber offer SDP:\n%v", offer)
 	err := yt.rtcSubscriber.SetRemoteDescription(
 		webrtc.SessionDescription{
 			Type: webrtc.SDPTypeOffer,
@@ -157,6 +163,7 @@ func (yt *YTClient) HandleRTCSubscriberOffer(offer string) error {
 		return fmt.Errorf("couldn't find ice-ufrag in generated SDP")
 	}
 
+	yt.log.Debugf("Subscriber answer SDP:\n%v", answer.SDP)
 	if err := yt.rtcSubscriber.SetLocalDescription(answer); err != nil {
 		return fmt.Errorf("failed to set subscriber local description: %w", err)
 	}
@@ -195,4 +202,38 @@ func (yt *YTClient) CloseRTCSubscriber() error {
 	}
 
 	return yt.rtcSubscriber.GracefulClose()
+}
+
+// noLoss hides the loss from the SFU's bandwidth estimator.
+//
+// The SFU paces the video it sends us at its estimate of our bandwidth, and
+// drops whatever doesn't fit. The subscriber offer only has goog-remb (no
+// transport-cc), and REMB is ignored, so the estimate is loss-based: it starts
+// at ~1 Mbit/s and grows (up to ~16 Mbit/s) only while our receiver reports
+// show no loss. Reporting the SFU's own drops back to it makes the estimate,
+// and the throughput, collapse.
+type noLossFactory struct{}
+
+func (*noLossFactory) NewInterceptor(string) (interceptor.Interceptor, error) {
+	return &noLoss{}, nil
+}
+
+type noLoss struct {
+	interceptor.NoOp
+}
+
+func (*noLoss) BindRTCPWriter(writer interceptor.RTCPWriter) interceptor.RTCPWriter {
+	return interceptor.RTCPWriterFunc(
+		func(pkts []rtcp.Packet, attributes interceptor.Attributes) (int, error) {
+			for _, pkt := range pkts {
+				if rr, ok := pkt.(*rtcp.ReceiverReport); ok {
+					for i := range rr.Reports {
+						rr.Reports[i].FractionLost = 0
+						rr.Reports[i].TotalLost = 0
+					}
+				}
+			}
+			return writer.Write(pkts, attributes)
+		},
+	)
 }

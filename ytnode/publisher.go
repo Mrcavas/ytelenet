@@ -3,6 +3,7 @@ package ytnode
 import (
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pion/rtcp"
@@ -108,6 +109,7 @@ func (yt *YTClient) InitRTCPublisher(
 		return fmt.Errorf("failed to get publisherSdpOffer payload: %w", err)
 	}
 
+	yt.log.Debugf("Publisher offer SDP:\n%v", offer.SDP)
 	offerPayload.Sdp = offer.SDP
 	yt.SendWS(
 		&WSMessageOutgoing{
@@ -123,6 +125,7 @@ func (yt *YTClient) HandleRTCPublisherAnswer(sdp string) error {
 		return fmt.Errorf("publisher PC is nil")
 	}
 
+	yt.log.Debugf("Publisher answer SDP:\n%v", sdp)
 	return yt.rtcPublisher.SetRemoteDescription(
 		webrtc.SessionDescription{
 			Type: webrtc.SDPTypeAnswer,
@@ -157,6 +160,10 @@ func (yt *YTClient) CloseRTCPublisher() error {
 
 func (yt *YTClient) DrainRTP(rtpSender *webrtc.RTPSender) {
 	rtcpBuf := make([]byte, 1500)
+	var remb float64
+	var nacks, nackedPkts, plis, firs, twccs int
+	lastReport := time.Now()
+
 	for {
 		// Continuously read from the sender to prevent buffer buildup
 		n, _, rtcpErr := rtpSender.Read(rtcpBuf)
@@ -175,20 +182,29 @@ func (yt *YTClient) DrainRTP(rtpSender *webrtc.RTPSender) {
 			for _, pkt := range packets {
 				switch p := pkt.(type) {
 				case *rtcp.ReceiverEstimatedMaximumBitrate:
-					// THIS IS THE SMOKING GUN.
-					// The SFU is explicitly telling us our bandwidth limit!
-					mbps := float64(p.Bitrate) / 1000000.0
-					yt.log.Infof("SFU REMB Command: Limit bandwidth to %.2f Mbps", mbps)
-
+					remb = float64(p.Bitrate) / 1000000.0
 				case *rtcp.TransportLayerCC:
-					// TWCC packets tell us if the SFU thinks we are causing network congestion
-					yt.log.Debugf("SFU TWCC: Congestion report received")
-
+					twccs++
+				case *rtcp.TransportLayerNack:
+					nacks++
+					for _, pair := range p.Nacks {
+						nackedPkts += len(pair.PacketList())
+					}
 				case *rtcp.PictureLossIndication:
-					// PLI means the SFU failed to decode a frame and wants a new Keyframe
-					yt.log.Debugf("SFU PLI: Frame dropped, requesting keyframe")
+					plis++
+				case *rtcp.FullIntraRequest:
+					firs++
 				}
 			}
+		}
+
+		if time.Since(lastReport) > 5*time.Second {
+			lastReport = time.Now()
+			yt.log.Debugf(
+				"SFU RTCP (5s): REMB %.2f Mbps, NACK %d (%d pkts), PLI %d, FIR %d, TWCC %d",
+				remb, nacks, nackedPkts, plis, firs, twccs,
+			)
+			nacks, nackedPkts, plis, firs, twccs = 0, 0, 0, 0, 0
 		}
 	}
 }
