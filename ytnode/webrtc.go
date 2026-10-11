@@ -1,14 +1,15 @@
 package ytnode
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
-	log "github.com/sirupsen/logrus"
 )
 
 func (yt *YTClient) InitializeRTC() error {
@@ -84,10 +85,16 @@ func (yt *YTClient) StreamFromDataTrack(mid string, track *webrtc.TrackRemote) {
 	yt.log.Infof("Started streaming from %v (%v)\n", mid, yt.targetName)
 
 	extractor := NewRTPExtractor()
-	yt.peerConfigMu.RLock()
 	currentReceiver := ""
 	currentConfigIdx := -1
-	yt.peerConfigMu.RUnlock()
+
+	emit := func(buf []byte) {
+		yt.rtcPacketsInc <- bytes.Clone(buf)
+	}
+
+	var rxPkts, rxBytes, rxLost int
+	var lastSeq uint16
+	lastStats := time.Now()
 
 	for {
 		packet, _, err := track.ReadRTP()
@@ -121,100 +128,105 @@ func (yt *YTClient) StreamFromDataTrack(mid string, track *webrtc.TrackRemote) {
 			continue
 		}
 
-		buf, ok := extractor.Extract(packet)
-		if ok {
-			if len(buf) > 0 {
-				// NEW: Unbatch the glued packets
-				for len(buf) >= 2 {
-					// Read the 2-byte length prefix
-					pktLen := int(buf[0])<<8 | int(buf[1])
-					buf = buf[2:] // advance past the length prefix
-
-					// Safety check in case of corruption
-					if len(buf) < pktLen {
-						yt.log.Warnf("Received malformed batch chunk\n")
-						break
-					}
-
-					// Push the exact original IP packet into the VPN interface
-					yt.rtcPacketsInc <- buf[:pktLen]
-
-					// Advance the buffer to the next glued packet
-					buf = buf[pktLen:]
-				}
-			}
-		} else {
-			yt.log.Warnf("Received malformed packet\n")
+		if gap := packet.SequenceNumber - lastSeq - 1; rxPkts > 0 && gap < 0x8000 {
+			rxLost += int(gap)
+		}
+		lastSeq = packet.SequenceNumber
+		rxPkts++
+		rxBytes += len(packet.Payload)
+		if time.Since(lastStats) > 5*time.Second {
+			yt.log.Debugf(
+				"RTP rx %v: %.2f Mbit/s, %d pkts, %d lost",
+				mid, float64(rxBytes)*8/1e6/time.Since(lastStats).Seconds(),
+				rxPkts, rxLost,
+			)
+			lastStats = time.Now()
+			rxPkts, rxBytes, rxLost = 0, 0, 0
 		}
 
-		// buf, ok := extractor.Extract(packet)
-		// if ok {
-		//   if len(buf) > 0 {
-		//     yt.rtcPacketsInc <- buf
-		//   }
-		// } else {
-		//   yt.log.Warnf("Received malformed packet\n")
-		// }
+		if !extractor.Extract(packet, emit) {
+			yt.log.Warnf("Received malformed packet\n")
+		}
 	}
 }
 
+const (
+	keepAliveDelay = 3 * time.Second
+
+	// The SFU drops frames if there are too many of them (somewhere above
+	// 250 fps), so packets that come in faster than that are batched.
+	frameInterval = 5 * time.Millisecond
+
+	// The SFU holds the last received RTP packet until the next one arrives, so
+	// when the queue runs empty, an empty frame is sent to push the data out.
+	chaserDelay = frameInterval
+)
+
+// StreamToDataTrack sends IP packets as soon as possible: everything that is
+// queued at the moment goes into one frame.
 func (yt *YTClient) StreamToDataTrack(track *webrtc.TrackLocalStaticRTP) {
 	yt.log.Infof("Started streaming to '%v'\n", yt.targetName)
 
 	constructor := NewRTPConstructor()
-	const keepAliveDelay = 3 * time.Second
+	write := func(p *rtp.Packet) error {
+		return track.WriteRTP(p)
+	}
+
 	keepAliveTimer := time.NewTimer(keepAliveDelay)
+	chaserTimer := time.NewTimer(chaserDelay)
+	chaserPending := true
+	lastFrame := time.Now()
 
-	maxBatchSize := yt.batching.MaxBatchSize*(RTPMaxPacketSize-4) - 10 // roughly 20 RTP packets per VP8 frame
-	batch := make([]byte, 0, maxBatchSize+2000)
+	// sendFrame sends buf and everything else that is queued as one frame
+	sendFrame := func(buf []byte) error {
+		constructor.BeginFrame()
+		if buf != nil {
+			constructor.Add(buf)
+		}
 
-	// Flush at every frame
-	flushDelay := time.Duration(int64(time.Second) / int64(yt.batching.FPS))
-	flushTicker := time.NewTicker(flushDelay)
-	defer flushTicker.Stop()
+	drain:
+		for constructor.FramePackets() < yt.batching.MaxBatchSize {
+			select {
+			case buf = <-yt.rtcPacketsOut:
+				constructor.Add(buf)
+			default:
+				break drain
+			}
+		}
+
+		lastFrame = time.Now()
+		return constructor.EndFrame(write)
+	}
 
 	for {
+		var err error
+
 		select {
 		case <-keepAliveTimer.C:
-			if err := track.WriteRTP(constructor.NewDummyPacket()); err != nil {
-				yt.log.Errorf("Error writing dummy to track: %v\n", err)
-				return
-			}
+			err = track.WriteRTP(constructor.NewDummyPacket())
 			keepAliveTimer.Reset(keepAliveDelay)
 
+		case <-chaserTimer.C:
+			if chaserPending {
+				chaserPending = false
+				err = sendFrame(nil)
+			}
+
 		case buf := <-yt.rtcPacketsOut:
-			// Prefix the packet with its length (2 bytes, Big Endian)
-			lenBuf := []byte{byte(len(buf) >> 8), byte(len(buf))}
-			batch = append(batch, lenBuf...)
-			batch = append(batch, buf...)
-
-			// If the batch is big enough, flush it as ONE single VP8 frame
-			if len(batch) >= maxBatchSize {
-				log.Warnf("Reached max batch size")
-				for packet := range constructor.NewPackets(batch) {
-					if err := track.WriteRTP(packet); err != nil {
-						yt.log.Errorf("Error writing to track: %v\n", err)
-						return
-					}
-				}
-				// Reset batch and timers
-				batch = make([]byte, 0, maxBatchSize+2000)
-				flushTicker.Reset(flushDelay)
-				keepAliveTimer.Reset(keepAliveDelay)
+			// let more packets queue up if the previous frame was just sent
+			if wait := frameInterval - time.Since(lastFrame); wait > 0 {
+				time.Sleep(wait)
 			}
 
-		case <-flushTicker.C:
-			// Flush whatever is in the batch when the timer ticks
-			if len(batch) > 0 {
-				for packet := range constructor.NewPackets(batch) {
-					if err := track.WriteRTP(packet); err != nil {
-						yt.log.Errorf("Error writing to track: %v\n", err)
-						return
-					}
-				}
-				batch = make([]byte, 0, maxBatchSize+2000)
-				keepAliveTimer.Reset(keepAliveDelay)
-			}
+			err = sendFrame(buf)
+			chaserPending = true
+			chaserTimer.Reset(chaserDelay)
+			keepAliveTimer.Reset(keepAliveDelay)
+		}
+
+		if err != nil {
+			yt.log.Errorf("Error writing to track: %v\n", err)
+			return
 		}
 	}
 }
