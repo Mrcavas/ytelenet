@@ -36,6 +36,10 @@ const (
 // packet.
 const MaxTunnelMTU = RTPMaxPacketSize - vp8DescriptorLen - vp8HeaderLen - chunkHeaderLen
 
+// DefaultTunnelMTU is the largest IP packet that fills exactly two RTP packets
+// when it starts a frame (1184 + 1194 bytes)
+const DefaultTunnelMTU = 2*RTPMaxPacketSize - 2*vp8DescriptorLen - vp8HeaderLen - 2*chunkHeaderLen
+
 //go:embed dummy.ivf
 var dummyIVFBytes []byte
 

@@ -125,3 +125,21 @@ func TestSmallPacketsFitOneRTPPacket(t *testing.T) {
 		t.Fatalf("MTU-sized packet took %d RTP packets", n)
 	}
 }
+
+func TestDefaultMTUFillsTwoRTPPackets(t *testing.T) {
+	packets := [][]byte{makeIPPacket(0, DefaultTunnelMTU)}
+	rtpPackets := packFrames(t, packets, 1)
+	if len(rtpPackets) != 2 {
+		t.Fatalf("MTU-sized packet took %d RTP packets", len(rtpPackets))
+	}
+	for _, p := range rtpPackets {
+		if len(p.Payload) != RTPMaxPacketSize {
+			t.Fatalf("RTP packet isn't full: %d bytes", len(p.Payload))
+		}
+	}
+
+	got := extractAll(t, rtpPackets)
+	if len(got) != 1 || !bytes.Equal(got[0], packets[0]) {
+		t.Fatal("packet didn't survive the round trip")
+	}
+}

@@ -25,7 +25,7 @@ type __args__ struct {
 	Server *ServerCmd `arg:"subcommand:server"`
 
 	Debug bool   `arg:"--debug" default:"false"`
-	MTU   uint32 `arg:"--mtu" default:"1500"`
+	MTU   uint32 `arg:"--mtu" help:"tunnel MTU, by default an IP packet fills exactly two RTP packets"`
 
 	MaxBatchSize int `arg:"-b,--batch" default:"64" help:"max RTP packets per video frame"`
 }
@@ -34,7 +34,7 @@ func (__args__) Version() string {
 	return "YTelenet 0.7.1"
 }
 
-var args __args__
+var args = __args__{MTU: ytnode.DefaultTunnelMTU}
 
 func main() {
 	interrupt := make(chan os.Signal, 1)

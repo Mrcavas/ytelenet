@@ -54,7 +54,7 @@ class YTVpnService : VpnService() {
 		val pcNum = parts[2].toInt()
 
 		val pfd = Builder()
-			.setMtu(2382)
+			.setMtu(2378) // ytnode.DefaultTunnelMTU
 			.setSession("YTelenet")
 			.addAddress("42.42.42.${pcNum}", 32)
 			.addRoute("0.0.0.0", 0)

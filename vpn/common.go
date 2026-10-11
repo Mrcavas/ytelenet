@@ -23,6 +23,8 @@ func makeInternalLog(debug bool) *log.Logger {
 	return internalLog
 }
 
+const tunnelName = "YTelenet"
+
 type TunnelOptions struct {
 	MTU         uint32
 	Target      string
@@ -44,7 +46,7 @@ func makeAndStartTunnel(
 	}
 
 	if fd == nil {
-		tunnelOpts.Name = "YTelenet"
+		tunnelOpts.Name = tunnelName
 		tunnelOpts.AutoRoute = isClient && !opts.NoAutoRoute
 		tunnelOpts.StrictRoute = isClient
 		tunnelOpts.Inet4Gateway = netip.MustParseAddr("42.42.42.1")
@@ -128,5 +130,5 @@ func cleanupLeftoverRules() {
 	}
 
 	// 4. Ensure the interface is actually destroyed
-	_ = exec.Command("ip", "link", "del", "YTelenet").Run()
+	_ = exec.Command("ip", "link", "del", tunnelName).Run()
 }

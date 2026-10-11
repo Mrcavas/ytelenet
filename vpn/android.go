@@ -60,7 +60,7 @@ func Start(
 	go func() {
 		err := androidMain(
 			stopChan, token, TunnelOptions{
-				MTU: 1500,
+				MTU: ytnode.DefaultTunnelMTU, // must match the MTU in YTVpnService
 				Dns: "1.1.1.1",
 			}, ytnode.BatchingOptions{
 				MaxBatchSize: 64,

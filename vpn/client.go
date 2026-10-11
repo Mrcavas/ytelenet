@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ func ClientMain(
 	log.Infof("Launching client\n")
 
 	internalLog := makeInternalLog(debug)
+	cleanupLeftoverDNS()
 
 	token, err := base64.StdEncoding.DecodeString(initStr)
 	if err != nil {
@@ -69,6 +71,15 @@ func ClientMain(
 
 	tunnel := makeAndStartTunnel(internalLog, true, pcNum, opts, nil)
 	defer tunnel.Close()
+
+	if !opts.NoAutoRoute && opts.Dns != "" {
+		restoreDNS, err := setSystemDNS(tunnelName, netip.MustParseAddr(opts.Dns))
+		if err != nil {
+			log.Errorf("Failed to set the system DNS: %v", err)
+		} else {
+			defer restoreDNS()
+		}
+	}
 
 	go func() {
 		buf := make([]byte, opts.MTU)
