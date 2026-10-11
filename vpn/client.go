@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"strconv"
@@ -17,26 +18,52 @@ func ClientMain(
 	interrupt chan os.Signal, initStr string, debug bool, opts TunnelOptions,
 	batchingOpts ytnode.BatchingOptions,
 ) {
+	stop := make(chan struct{})
+	go func() {
+		<-interrupt
+		close(stop)
+	}()
+
+	if err := runClient(stop, initStr, debug, opts, batchingOpts, nil); err != nil {
+		log.Fatalf("%v\n", err)
+	}
+}
+
+// parseToken decodes base64("<room id>;<client name>;<pc number>")
+func parseToken(initStr string) (roomUrl, clientName string, pcNum int, err error) {
+	token, err := base64.StdEncoding.DecodeString(initStr)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to decode token")
+	}
+
+	parts := strings.Split(string(token), ";")
+	if len(parts) != 3 {
+		return "", "", 0, fmt.Errorf("failed to decode token")
+	}
+
+	pcNum, err = strconv.Atoi(parts[2])
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to decode token")
+	}
+
+	return makeRoomUrl(parts[0]), parts[1], pcNum, nil
+}
+
+// runClient connects to the room and forwards packets between it and the
+// tunnel until stop is closed or the node stops. onConnected (if not nil) is
+// called once the tunnel is up.
+func runClient(
+	stop <-chan struct{}, initStr string, debug bool, opts TunnelOptions,
+	batchingOpts ytnode.BatchingOptions, onConnected func(),
+) error {
 	log.Infof("Launching client\n")
 
 	internalLog := makeInternalLog(debug)
 	cleanupLeftoverDNS()
 
-	token, err := base64.StdEncoding.DecodeString(initStr)
+	roomUrl, clientName, pcNum, err := parseToken(initStr)
 	if err != nil {
-		log.Fatalf("Failed to decode token")
-	}
-
-	parts := strings.Split(string(token), ";")
-	if len(parts) != 3 {
-		log.Fatalf("Failed to decode token")
-	}
-
-	roomUrl := makeRoomUrl(parts[0])
-	clientName := parts[1]
-	pcNum, err := strconv.Atoi(parts[2])
-	if err != nil {
-		log.Fatalf("Failed to decode token")
+		return err
 	}
 
 	log.Infof("Initializing YT node\n")
@@ -44,7 +71,7 @@ func ClientMain(
 		internalLog, roomUrl, clientName, opts.Target, batchingOpts,
 	)
 	if err != nil {
-		log.Fatalf("Failed to initialize YT nodes: %v\n", err)
+		return fmt.Errorf("failed to initialize YT nodes: %w", err)
 	}
 	defer func() { node.Stop() }()
 
@@ -52,24 +79,25 @@ func ClientMain(
 	select {
 	case st := <-node.Events():
 		if st != ytnode.ConnectedState {
-			log.Fatalf("Unable to connect")
+			return fmt.Errorf("unable to connect")
 		}
-	case <-interrupt:
+	case <-stop:
 		log.Info("Interrupted\n")
-		return
+		return nil
 	}
 	log.Infof("Connected\n")
 
 	if opts.Target == "server" {
-		if node.IsTargetInRoom() {
-			log.Infof("Server is in the room, all good")
-		} else {
-			log.Errorf("Server isn't connected. Try reconnecting")
-			return
+		if !node.IsTargetInRoom() {
+			return fmt.Errorf("server isn't connected, try reconnecting")
 		}
+		log.Infof("Server is in the room, all good")
 	}
 
-	tunnel := makeAndStartTunnel(internalLog, true, pcNum, opts, nil)
+	tunnel, err := makeAndStartTunnel(internalLog, true, pcNum, opts, nil)
+	if err != nil {
+		return err
+	}
 	defer tunnel.Close()
 
 	if !opts.NoAutoRoute && opts.Dns != "" {
@@ -81,6 +109,11 @@ func ClientMain(
 		}
 	}
 
+	if onConnected != nil {
+		onConnected()
+	}
+
+	tunnelErr := make(chan error, 1)
 	go func() {
 		buf := make([]byte, opts.MTU)
 
@@ -88,10 +121,11 @@ func ClientMain(
 			size, err := tunnel.Read(buf)
 			if errors.Is(err, os.ErrClosed) {
 				log.Infof("Closed tunnel\n")
-				break
+				return
 			}
 			if err != nil {
-				log.Fatalf("Failed to read from tunnel: %v\n", err)
+				tunnelErr <- fmt.Errorf("failed to read from tunnel: %w", err)
+				return
 			}
 
 			if size < 20 {
@@ -108,8 +142,11 @@ func ClientMain(
 		case state := <-node.Events():
 			if state == ytnode.StoppedState {
 				log.Warnf("Node stopped\n")
-				return
+				return nil
 			}
+
+		case err := <-tunnelErr:
+			return err
 
 		case buf := <-node.Data():
 			if len(buf) < 20 {
@@ -117,15 +154,15 @@ func ClientMain(
 			}
 			_, err := tunnel.Write(bytes.Clone(buf))
 			if errors.Is(err, os.ErrClosed) {
-				return
+				return nil
 			}
 			if err != nil {
 				log.Errorf("Couldn't write packet\n")
 			}
 
-		case <-interrupt:
+		case <-stop:
 			log.Infof("Interrupted\n")
-			return
+			return nil
 		}
 	}
 }

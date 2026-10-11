@@ -35,7 +35,7 @@ type TunnelOptions struct {
 func makeAndStartTunnel(
 	internalLog *log.Logger, isClient bool, pcNum int, opts TunnelOptions,
 	fd *int,
-) tun.Tun {
+) (tun.Tun, error) {
 	mask := 24
 
 	cleanupLeftoverRules()
@@ -56,7 +56,7 @@ func makeAndStartTunnel(
 
 		netMon, err := tun.NewNetworkUpdateMonitor(internalLog)
 		if err != nil {
-			log.Fatalf("Failed to create network update monitor: %v\n", err)
+			return nil, fmt.Errorf("failed to create network update monitor: %w", err)
 		}
 
 		intMon, err := tun.NewDefaultInterfaceMonitor(
@@ -65,7 +65,7 @@ func makeAndStartTunnel(
 			tun.DefaultInterfaceMonitorOptions{},
 		)
 		if err != nil {
-			log.Fatalf("Failed to create interface monitor: %v\n", err)
+			return nil, fmt.Errorf("failed to create interface monitor: %w", err)
 		}
 
 		tunnelOpts.InterfaceMonitor = intMon
@@ -80,7 +80,7 @@ func makeAndStartTunnel(
 	if isClient && opts.Dns != "" {
 		dnsAddr, err := netip.ParseAddr(opts.Dns)
 		if err != nil {
-			log.Fatalf("Failed to parse DNS")
+			return nil, fmt.Errorf("failed to parse DNS: %w", err)
 		}
 
 		tunnelOpts.DNSServers = []netip.Addr{dnsAddr}
@@ -88,15 +88,16 @@ func makeAndStartTunnel(
 
 	tunnel, err := tun.New(tunnelOpts)
 	if err != nil {
-		log.Fatalf("Failed to create tunnel: %v\n", err)
+		return nil, fmt.Errorf("failed to create tunnel: %w", err)
 	}
 
 	if err := tunnel.Start(); err != nil {
-		log.Fatalf("Failed to start tunnel: %v\n", err)
+		_ = tunnel.Close()
+		return nil, fmt.Errorf("failed to start tunnel: %w", err)
 	}
 	log.Infof("Started tunnel\n")
 
-	return tunnel
+	return tunnel, nil
 }
 
 func makeRoomUrl(roomId string) string {

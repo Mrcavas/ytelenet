@@ -111,7 +111,10 @@ func androidMain(
 		return fmt.Errorf("failed to decode token")
 	}
 
-	tunnel := makeAndStartTunnel(internalLog, true, pcNum, opts, &fd)
+	tunnel, err := makeAndStartTunnel(internalLog, true, pcNum, opts, &fd)
+	if err != nil {
+		return err
+	}
 	defer tunnel.Close()
 
 	log.Infof("Initializing YT node\n")

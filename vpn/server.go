@@ -24,9 +24,12 @@ func ServerMain(
 	}
 	defer nodes.Stop()
 
-	tunnel := makeAndStartTunnel(
+	tunnel, err := makeAndStartTunnel(
 		internalLog, false, 1, TunnelOptions{MTU: MTU}, nil,
 	)
+	if err != nil {
+		log.Fatalf("Failed to start tunnel: %v\n", err)
+	}
 	defer tunnel.Close()
 
 	go func() {

@@ -19,10 +19,17 @@ type ClientCmd struct {
 	Target      string `arg:"--to" default:"server"`
 }
 type ServerCmd struct{}
+type BackendCmd struct {
+	Connect string `arg:"--connect,required" help:"address of the GUI to connect to"`
+	Key     string `arg:"--key,required" help:"key to authenticate with the GUI"`
+}
 
 type __args__ struct {
 	Client *ClientCmd `arg:"subcommand:client"`
 	Server *ServerCmd `arg:"subcommand:server"`
+
+	// launched by the desktop GUI, see vpn.BackendMain
+	Backend *BackendCmd `arg:"subcommand:gui-backend"`
 
 	Debug bool   `arg:"--debug" default:"false"`
 	MTU   uint32 `arg:"--mtu" help:"tunnel MTU, by default an IP packet fills exactly two RTP packets"`
@@ -77,5 +84,13 @@ func main() {
 			},
 			batchingOpts,
 		)
+	} else if args.Backend != nil {
+		err := vpn.BackendMain(
+			interrupt, args.Backend.Connect, args.Backend.Key, args.MTU,
+			batchingOpts,
+		)
+		if err != nil {
+			log.Fatalf("Backend failed: %v", err)
+		}
 	}
 }
