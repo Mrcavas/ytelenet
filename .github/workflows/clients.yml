@@ -40,6 +40,22 @@ jobs:
           name: desktop-${{ runner.os }}
           path: app/desktopApp/build/compose/binaries/main/*/*
 
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel git jdk17-openjdk go
+      - uses: actions/checkout@v4
+      # makepkg refuses to run as root
+      - run: |
+          useradd -m builder
+          chown -R builder:builder .
+          su builder -c 'cd app && ./gradlew --no-daemon :desktopApp:packageArch'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-Arch
+          path: app/desktopApp/build/compose/binaries/main/arch/*.pkg.tar.zst
+
   android:
     runs-on: ubuntu-latest
     defaults:

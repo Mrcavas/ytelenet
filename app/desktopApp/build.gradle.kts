@@ -82,6 +82,8 @@ tasks.matching { it.name == "createDistributable" || it.name == "createReleaseDi
 	}
 }
 
+val appVersion = "0.1.1"
+
 compose.desktop {
 	application {
 		mainClass = "me.d0a1.ytelenet.desktop.MainKt"
@@ -90,7 +92,7 @@ compose.desktop {
 			targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
 
 			packageName = "YTelenet"
-			packageVersion = "0.1.1"
+			packageVersion = appVersion
 			description = "VPN over Yandex Telemost"
 			vendor = "d0a1"
 			licenseFile = rootProject.file("../LICENSE")
@@ -119,5 +121,34 @@ compose.desktop {
 		buildTypes.release.proguard {
 			isEnabled = false
 		}
+	}
+}
+
+// jpackage can't make pacman packages, so the app image is packaged with
+// makepkg. Runs on Arch only.
+val archDir = layout.buildDirectory.dir("compose/binaries/main/arch")
+
+val prepareArchPackage by tasks.registering(Sync::class) {
+	dependsOn("createDistributable")
+	from(layout.buildDirectory.dir("compose/binaries/main/app"))
+	from("packaging/arch")
+	from("icons/ytelenet.png")
+	from(rootProject.file("../LICENSE"))
+	into(archDir.map { it.dir("staging") })
+}
+
+val packageArch by tasks.registering(Exec::class) {
+	group = "compose desktop"
+	description = "Builds a pacman package for Arch Linux with makepkg"
+	dependsOn(prepareArchPackage)
+
+	workingDir(archDir.map { it.dir("staging") })
+	environment("YTELENET_VERSION", appVersion)
+	environment("PKGDEST", archDir.get().asFile.absolutePath)
+	commandLine("makepkg", "--force", "--nodeps", "--noconfirm")
+
+	doLast {
+		archDir.get().asFile.listFiles { f -> f.name.endsWith(".pkg.tar.zst") }
+			?.forEach { logger.lifecycle("The package is written to $it") }
 	}
 }

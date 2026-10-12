@@ -20,6 +20,7 @@ cd app
 ./gradlew :desktopApp:run            # запустить
 ./gradlew :desktopApp:packageMsi     # на Windows
 ./gradlew :desktopApp:packageDeb     # на Linux, или packageRpm
+./gradlew :desktopApp:packageArch    # на Arch Linux, нужен makepkg (base-devel)
 ```
 Пакеты появятся в `app/desktopApp/build/compose/binaries/main/`. Собрать их можно
 только на той ОС, под которую они делаются, поэтому CI собирает их на своих раннерах.

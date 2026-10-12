@@ -1,0 +1,28 @@
+# Used by `./gradlew :desktopApp:packageArch`: it copies this directory, the
+# app image (as YTelenet/), the icon and LICENSE into a staging directory and
+# runs makepkg there
+pkgname=ytelenet
+pkgver=${YTELENET_VERSION:-0.0.0}
+pkgrel=1
+pkgdesc="VPN over Yandex Telemost"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Mrcavas/ytelenet"
+license=('CC-BY-NC-SA-4.0')
+# polkit for pkexec, the rest is what the bundled JRE and Skia load
+depends=('polkit' 'glibc' 'libx11' 'libxext' 'libxrender' 'libxtst' 'libxi' 'fontconfig' 'freetype2' 'hicolor-icon-theme')
+optdepends=('libglvnd: hardware accelerated rendering')
+options=('!strip' '!debug')
+
+package() {
+	install -d "$pkgdir/opt"
+	cp -a "$startdir/YTelenet" "$pkgdir/opt/ytelenet"
+
+	install -d "$pkgdir/usr/bin"
+	ln -s /opt/ytelenet/bin/YTelenet "$pkgdir/usr/bin/ytelenet-gui"
+	# the Go client bundled for the GUI works as the CLI too
+	ln -s /opt/ytelenet/lib/app/resources/ytelenet "$pkgdir/usr/bin/ytelenet"
+
+	install -Dm644 "$startdir/ytelenet.desktop" "$pkgdir/usr/share/applications/ytelenet.desktop"
+	install -Dm644 "$startdir/ytelenet.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/ytelenet.png"
+	install -Dm644 "$startdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
