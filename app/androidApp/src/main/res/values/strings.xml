@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name" translatable="false">YTelenet</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="status_chan_name">Status</string>
+    <string name="status_chan_description">Shows the active VPN connection status</string>
+    <string name="status_notif_description">Connected and running in the background</string>
+</resources>

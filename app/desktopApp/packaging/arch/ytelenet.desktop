@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=YTelenet
+Comment=VPN over Yandex Telemost
+Exec=/opt/ytelenet/bin/YTelenet
+Icon=ytelenet
+Terminal=false
+Categories=Network;
